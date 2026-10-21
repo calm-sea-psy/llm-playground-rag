@@ -1,0 +1,13 @@
+# 데이터·문서 (커밋하지 않음)
+data/
+docs/
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# 환경 변수
+.env
