@@ -50,7 +50,7 @@
 | UI | Phase 1~3 없음(Swagger), Phase 4 Gradio 데모 1개 | |
 | 평가 데이터 | KorQuAD 1.0 (위키 기반 QA 6만 쌍) | 검색·생성 정답지로 사용 |
 | 패키지 관리 | uv (`pyproject.toml` + `uv.lock`, `.venv` 프로젝트 내부), Python 3.13 고정(`.python-version`) | `uv run`으로 스크립트 실행, lock 파일 커밋 |
-| 브랜치 | `main` + 작업용 `dev` | 작업은 `dev`에서 진행 |
+| 브랜치 | 로컬은 `main` 하나 | 원격은 공개 저장소 `calm-sea-psy/llm-playground-rag` |
 | 코드 규칙 | 전역 스킬 `python-conventions` + ruff(base + fastapi + numpy) | frozen dataclass, pydantic은 API 경계에서만 |
 | PR | 전역 스킬 `pr-create` + `pr-lint` 워크플로 | 검수 후 생성 |
 
