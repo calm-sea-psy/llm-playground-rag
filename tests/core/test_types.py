@@ -1,8 +1,9 @@
 from dataclasses import FrozenInstanceError
 
 import pytest
+from playground_corpus import Chunk
 
-from llm_playground_rag.core import Chunk, Document, Filters, Hit, Section
+from playground_rag.core import Filters, Hit
 
 
 def _chunk() -> Chunk:
@@ -14,13 +15,6 @@ def _chunk() -> Chunk:
         text="서울특별시 > 역사\n조선의 수도였다.",
         seq=0,
     )
-
-
-def test_document_defaults_to_empty_categories_and_meta():
-    doc = Document(id="1", title="서울특별시", text="본문", sections=(Section(0, "", "본문"),))
-
-    assert doc.categories == ()
-    assert doc.meta == {}
 
 
 def test_hit_is_frozen():
