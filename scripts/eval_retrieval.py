@@ -1,0 +1,173 @@
+"""검색기를 KorQuAD dev 로 평가한다: hit@1/5/10 · MRR@10 · 문서 hit@5 · 지연.
+
+서브셋을 청킹해 검색기를 만들고, 서브셋에 정답 문서가 있는 질문으로 잰다.
+정답 판정은 playground_evalkit (제목 일치 + 공백 무시 정답 포함) — CORPUS 임베딩 벤치와 같은 규칙이다.
+서브셋 수치는 검색기 간 상대 비교 전용이다.
+
+출력:
+  data/runs/{run_id}/records-{retriever}.jsonl   문항별 점수 (git 제외)
+  reports/{run_id}.md                            집계 표 (커밋)
+
+사용법:
+  uv run python scripts/eval_retrieval.py --retriever bm25
+  uv run python scripts/eval_retrieval.py --retriever bm25 --max-tokens 256 384 512
+"""
+
+import argparse
+import json
+import time
+from datetime import UTC, datetime
+from pathlib import Path
+
+from playground_corpus import Chunk, Chunker, ChunkingConfig, HFTokenizer, read_documents
+from playground_evalkit import (
+    KorQuADItem,
+    ResultRecord,
+    contains_answer,
+    hit_at_k,
+    load_korquad,
+    mrr,
+    render_table,
+    write_records,
+)
+
+from playground_rag.core import Retriever
+from playground_rag.retrieval import Bm25Retriever, KiwiAnalyzer
+
+SUBSET = Path("data/parsed/kowiki-subset-10000")
+TOKENIZER = "BAAI/bge-m3"  # 후보 임베딩 3종이 같은 XLM-R 토크나이저라 청크 경계가 같다
+TOP_K = 10
+RETRIEVERS = ("bm25",)
+
+
+def main() -> None:
+    args = _parse_args()
+    run_id = args.run_id or f"{datetime.now(tz=UTC):%Y-%m-%d}-retrieval-{'-'.join(args.retriever)}"
+    summary = json.loads((args.subset / "subset.json").read_text(encoding="utf-8"))
+    documents = list(read_documents(args.subset / "docs-00000.parquet"))
+    titles = {doc.title for doc in documents}
+    items = [
+        item
+        for item in load_korquad(
+            Path(summary["korquad_dev"]), title_aliases=summary["korquad_title_map"]
+        )
+        if item.title in titles
+    ]
+    tokenizer = HFTokenizer.from_pretrained(TOKENIZER)
+    print(f"documents={len(documents)} questions={len(items)} run_id={run_id}")
+
+    rows = []
+    for max_tokens in args.max_tokens:
+        chunker = Chunker(tokenizer, ChunkingConfig(max_tokens=max_tokens))
+        chunks = [chunk for doc in documents for chunk in chunker.chunk(doc)]
+        for name in args.retriever:
+            start = time.perf_counter()
+            retriever = _build(name, chunks)
+            build_sec = time.perf_counter() - start
+            row, records = _evaluate(run_id, name, max_tokens, retriever, items)
+            write_records(
+                Path("data/runs") / run_id / f"records-{name}-{max_tokens}.jsonl", records
+            )
+            rows.append({**row, "chunks": len(chunks), "build_sec": round(build_sec, 1)})
+            print(
+                f"{name} {max_tokens}: hit@5={row['hit_at_5']:.3f} mrr={row['mrr_at_10']:.3f} "
+                f"doc_hit@5={row['doc_hit_at_5']:.3f} p50={row['p50_ms']}ms build={build_sec:.0f}s"
+            )
+
+    _write_report(run_id, rows, len(documents), len(items), args)
+
+
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--retriever", nargs="+", default=["bm25"], choices=RETRIEVERS)
+    parser.add_argument("--subset", type=Path, default=SUBSET)
+    parser.add_argument("--max-tokens", nargs="+", type=int, default=[384])
+    parser.add_argument("--run-id", default="")
+    return parser.parse_args()
+
+
+def _build(name: str, chunks: list[Chunk]) -> Retriever:
+    if name == "bm25":
+        return Bm25Retriever(chunks, KiwiAnalyzer())
+    raise ValueError(f"unknown retriever: {name}")
+
+
+def _evaluate(
+    run_id: str, name: str, max_tokens: int, retriever: Retriever, items: list[KorQuADItem]
+) -> tuple[dict[str, float | str | int], list[ResultRecord]]:
+    relevance: list[list[bool]] = []
+    doc_relevance: list[list[bool]] = []
+    latencies: list[float] = []
+    for item in items:
+        start = time.perf_counter()
+        hits = retriever.search(item.question, k=TOP_K)
+        latencies.append((time.perf_counter() - start) * 1000)
+        relevance.append([contains_answer(hit.chunk.title, hit.chunk.text, item) for hit in hits])
+        doc_relevance.append([hit.chunk.title == item.title for hit in hits])
+    created_at = datetime.now(tz=UTC).isoformat(timespec="seconds")
+    records = [
+        ResultRecord(
+            run_id=run_id,
+            spec_id=f"{name}/{max_tokens}",
+            item_id=item.id,
+            scores={
+                "hit@1": float(any(rel[:1])),
+                "hit@5": float(any(rel[:5])),
+                "hit@10": float(any(rel[:10])),
+                "doc_hit@5": float(any(doc[:5])),
+            },
+            spec={"retriever": name, "max_tokens": max_tokens, "tokenizer": TOKENIZER},
+            created_at=created_at,
+        )
+        for item, rel, doc in zip(items, relevance, doc_relevance, strict=True)
+    ]
+    latencies.sort()
+    row = {
+        "retriever": name,
+        "max_tokens": max_tokens,
+        "hit_at_1": hit_at_k(relevance, 1),
+        "hit_at_5": hit_at_k(relevance, 5),
+        "hit_at_10": hit_at_k(relevance, 10),
+        "mrr_at_10": mrr(relevance),
+        "doc_hit_at_5": hit_at_k(doc_relevance, 5),
+        "p50_ms": round(latencies[len(latencies) // 2], 1),
+        "p99_ms": round(latencies[int(len(latencies) * 0.99)], 1),
+    }
+    return row, records
+
+
+def _write_report(
+    run_id: str,
+    rows: list[dict[str, float | str | int]],
+    documents: int,
+    questions: int,
+    args: argparse.Namespace,
+) -> None:
+    columns = [
+        "retriever",
+        "max_tokens",
+        "chunks",
+        "hit_at_1",
+        "hit_at_5",
+        "hit_at_10",
+        "mrr_at_10",
+        "doc_hit_at_5",
+        "p50_ms",
+        "p99_ms",
+        "build_sec",
+    ]
+    report = (
+        f"# 검색 평가 — {run_id}\n\n"
+        f"- 서브셋: `{args.subset.name}` 문서 {documents:,}개 · KorQuAD dev 질문 {questions:,}개 (정답 문서가 서브셋에 있는 질문)\n"
+        f"- 청킹: `{TOKENIZER}` 토크나이저 기준 (후보 임베딩 3종과 같은 청크 경계)\n"
+        "- 정답 판정: evalkit `contains_answer` (제목 일치 + 공백 무시 정답 포함) — CORPUS 임베딩 벤치와 같은 규칙\n"
+        "- **서브셋 수치는 상대 비교 전용** — 방해 문서가 적어 전체 코퍼스보다 높게 나온다\n"
+        "- 지연은 질의 하나의 검색 시간 (색인은 미리 만든 상태)\n\n" + render_table(rows, columns)
+    )
+    Path("reports").mkdir(exist_ok=True)
+    (Path("reports") / f"{run_id}.md").write_text(report, encoding="utf-8")
+    print(f"report: reports/{run_id}.md")
+
+
+if __name__ == "__main__":
+    main()
