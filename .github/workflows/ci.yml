@@ -1,7 +1,6 @@
 # 린트 · 테스트. main push 와 PR 에서 돈다
 #   PostgreSQL · Qdrant 를 서비스 컨테이너로 띄워 연동 테스트까지 돌린다 (docker-compose.yml 과 같은 이미지 · 계정)
 #   리랭커 토크나이저 계약 테스트는 CI 환경변수가 있으면 skip 하지 않고 실패한다
-# 첫 태그 전까지 모듈 레포를 같은 부모 폴더에 나란히 둔다 (pyproject.toml 의 path 의존)
 name: CI
 
 on:
@@ -16,9 +15,6 @@ jobs:
   test:
     name: test
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: llm-playground-rag
     services:
       postgres:
         image: postgres:17
@@ -40,17 +36,7 @@ jobs:
           - 6334:6334
     steps:
       - uses: actions/checkout@v5
-        with:
-          path: llm-playground-rag
-      - uses: actions/checkout@v5
-        with:
-          repository: calm-sea-psy/llm-playground-corpus
-          path: llm-playground-corpus
-      - uses: actions/checkout@v5
-        with:
-          repository: calm-sea-psy/llm-playground-llm
-          path: llm-playground-llm
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v10.2.0
       - name: Install
         run: uv sync --locked
       - name: Ruff
