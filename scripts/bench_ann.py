@@ -14,7 +14,8 @@
 
 사용법:
   uv run python scripts/bench_ann.py --collection kowiki-subset-10000_kure-v1
-  uv run python scripts/bench_ann.py --collection kowiki_kure-v1 --skip-qdrant-exact --run-id ann-benchmark
+  QDRANT_TIMEOUT=300 uv run python scripts/bench_ann.py --collection kowiki_kure-v1 --skip-qdrant-exact --nlist 4096 --run-id ann-benchmark
+  (전체 규모 Qdrant 는 100개 묶음 요청이 기본 시간 제한 5초를 넘는다)
 """
 
 import argparse
@@ -59,6 +60,17 @@ QDRANT_BATCH = 100  # 처리량 측정 때 요청 하나에 담는 질의 수
 HNSW_EF = (16, 32, 64, 128, 256)
 NPROBE = (1, 4, 16, 64)
 QDRANT_EF = (16, 32, 64, 128, 256)
+RUNS_DIR = Path("data/runs")  # FAISS 결과 저장 (git 제외)
+# --qdrant-variants 이름 → (리포트 표기, 양자화 검색 인자)
+QDRANT_VARIANTS = {
+    "float": ("HNSW float", models.QuantizationSearchParams(ignore=True)),  # 원본 벡터(on_disk)로
+    "int8": ("HNSW int8", models.QuantizationSearchParams(ignore=False, rescore=False)),
+    # 재채점은 후보 안의 순서만 바꾸므로 후보를 2배로 뽑아야 recall 이 오른다
+    "int8-rescore": (
+        "HNSW int8+rescore x2",
+        models.QuantizationSearchParams(ignore=False, rescore=True, oversampling=2.0),
+    ),
+}
 COLUMNS = [
     "engine",
     "index",
@@ -92,7 +104,6 @@ def main() -> None:
     chunk_ids, vectors = EmbeddingCache(
         EMB_DIR / args.model / f"{args.collection}-{args.max_tokens}"
     ).load()
-    doc_ids = [chunk_id.rsplit("-", 1)[0] for chunk_id in chunk_ids]  # 청크 id = {문서 id}-{순서}
     pg = PgStore.connect(PgConfig.from_env())
     chunks = _ChunkCache(pg, args.collection)
     items = _sample_questions(args, pg.collection_titles(args.collection, SOURCE))
@@ -112,6 +123,39 @@ def main() -> None:
             for item, ids in zip(items, found, strict=True)
         ]
 
+    # FAISS 결과는 저장해 두고 다시 쓴다 — 전체 규모에서 25분 걸리므로 Qdrant 쪽이 실패해도 다시 돌리지 않게
+    checkpoint = RUNS_DIR / run_id / "faiss.json"
+    if checkpoint.exists() and not args.redo_faiss:
+        saved = json.loads(checkpoint.read_text(encoding="utf-8"))
+        rows, truth = saved["rows"], saved["truth"]
+        print(f"faiss: {checkpoint} 재사용 ({len(rows)}행)")
+    else:
+        rows, truth = _faiss_rows(args, chunk_ids, vectors, queries, judge)
+        checkpoint.parent.mkdir(parents=True, exist_ok=True)
+        checkpoint.write_text(json.dumps({"rows": rows, "truth": truth}), encoding="utf-8")
+    del vectors  # Qdrant 단계에서는 쓰지 않는다 (전체 규모 약 10GB)
+
+    specs = _qdrant_specs(
+        exact=not args.skip_qdrant_exact, variants=args.qdrant_variants, float_ef=args.float_ef
+    )
+    for label, param, params in specs:
+        run = _qdrant_run(qdrant, args.collection, queries, params, batch=args.qdrant_batch)
+        row = _row("qdrant", label, param, run, truth=truth, judge=judge)
+        rows.append({**row, "build_sec": "-", "index_mb": "-"})
+        _print(row)
+
+    _write_report(run_id, rows, len(chunk_ids), len(items), args)
+
+
+def _faiss_rows(
+    args: argparse.Namespace,
+    chunk_ids: Sequence[str],
+    vectors: NDArray[np.float32],
+    queries: NDArray[np.float32],
+    judge: Callable[[list[list[str]]], list[list[bool]]],
+) -> tuple[list[dict[str, float | str | int]], list[list[str]]]:
+    """FAISS 색인마다 만들고 검색 인자를 바꿔 가며 잰 행 목록과 정답(Flat 상위 10)."""
+    doc_ids = [chunk_id.rsplit("-", 1)[0] for chunk_id in chunk_ids]  # 청크 id = {문서 id}-{순서}
     rows: list[dict[str, float | str | int]] = []
     truth: list[list[str]] = []
     for factory, param, values in _faiss_specs(args.nlist or _nlist(len(chunk_ids))):
@@ -131,14 +175,7 @@ def main() -> None:
             row = _row("faiss", factory, label, run, truth=truth, judge=judge)
             rows.append({**row, "build_sec": round(build_sec, 1), "index_mb": round(index_mb, 1)})
             _print(row)
-
-    for label, param, params in _qdrant_specs(exact=not args.skip_qdrant_exact):
-        run = _qdrant_run(qdrant, args.collection, queries, params)
-        row = _row("qdrant", label, param, run, truth=truth, judge=judge)
-        rows.append({**row, "build_sec": "-", "index_mb": "-"})
-        _print(row)
-
-    _write_report(run_id, rows, len(chunk_ids), len(items), args)
+    return rows, truth
 
 
 def _parse_args() -> argparse.Namespace:
@@ -165,8 +202,24 @@ def _parse_args() -> argparse.Namespace:
         help="Qdrant 전수 검색을 건너뛴다 (전체 규모에서 질의마다 원본 벡터를 디스크에서 다 읽는다)",
     )
     parser.add_argument(
+        "--qdrant-variants",
+        nargs="+",
+        default=list(QDRANT_VARIANTS),
+        choices=list(QDRANT_VARIANTS),
+        help="잴 Qdrant 설정. float 는 원본 벡터(on_disk)로 찾아 전체 규모에서 질의당 수백 ms",
+    )
+    parser.add_argument(
+        "--float-ef", nargs="+", type=int, default=list(QDRANT_EF), help="float 설정의 hnsw_ef 값들"
+    )
+    parser.add_argument(
+        "--qdrant-batch", type=int, default=QDRANT_BATCH, help="처리량 측정 때 요청 하나의 질의 수"
+    )
+    parser.add_argument(
+        "--redo-faiss", action="store_true", help="저장한 FAISS 결과가 있어도 다시 잰다"
+    )
+    parser.add_argument(
         "--machine",
-        default="RTX 5080 Laptop · 전원 모드 최고 성능(GPU 약 95W) · CPU 24스레드",
+        default="RTX 5080 Laptop · GPU 전력 상한 95W · CPU 24스레드 (FAISS · Qdrant 측정은 CPU)",
         help="리포트에 적는 장비 · 전원 상태 (지연 · QPS 는 전원 모드에 따라 달라진다)",
     )
     parser.add_argument("--run-id", default="")
@@ -250,44 +303,44 @@ class _ChunkCache:
         return self._by_id
 
 
-def _qdrant_specs(*, exact: bool) -> list[tuple[str, str, models.SearchParams]]:
+def _qdrant_specs(
+    *, exact: bool, variants: Sequence[str], float_ef: Sequence[int]
+) -> list[tuple[str, str, models.SearchParams]]:
     """(색인 이름, 인자 표기, 검색 인자). 컬렉션은 HNSW(m=16) + int8 스칼라 양자화, 원본 벡터 on_disk."""
     original = models.QuantizationSearchParams(ignore=True)
-    variants = (
-        ("HNSW float", original),  # 양자화를 쓰지 않고 원본 벡터로
-        ("HNSW int8", models.QuantizationSearchParams(ignore=False, rescore=False)),
-        # 재채점은 후보 안의 순서만 바꾸므로 후보를 2배로 뽑아야 recall 이 오른다
-        (
-            "HNSW int8+rescore x2",
-            models.QuantizationSearchParams(ignore=False, rescore=True, oversampling=2.0),
-        ),
-    )
     specs = (
         [("exact float", "-", models.SearchParams(exact=True, quantization=original))]
         if exact
         else []
     )
-    for label, quantization in variants:
+    for variant in variants:
+        label, quantization = QDRANT_VARIANTS[variant]
+        efs = float_ef if variant == "float" else QDRANT_EF
         specs.extend(
             (label, f"hnsw_ef={ef}", models.SearchParams(hnsw_ef=ef, quantization=quantization))
-            for ef in QDRANT_EF
+            for ef in efs
         )
     return specs
 
 
 def _qdrant_run(
-    store: QdrantStore, collection: str, queries: NDArray[np.float32], params: models.SearchParams
+    store: QdrantStore,
+    collection: str,
+    queries: NDArray[np.float32],
+    params: models.SearchParams,
+    *,
+    batch: int,
 ) -> RunResult:
     for query in queries[:WARMUP]:
         store.search(collection, query, TOP_K, params=params)
     latencies = _timed(lambda q: store.search(collection, q, TOP_K, params=params), queries)
     start = time.perf_counter()
     found: list[list[str]] = []
-    for offset in range(0, len(queries), QDRANT_BATCH):
-        batch = store.search_batch(
-            collection, queries[offset : offset + QDRANT_BATCH], TOP_K, params=params
+    for offset in range(0, len(queries), batch):
+        results = store.search_batch(
+            collection, queries[offset : offset + batch], TOP_K, params=params
         )
-        found.extend([hit.chunk_id for hit in hits] for hits in batch)
+        found.extend([hit.chunk_id for hit in hits] for hits in results)
     qps = len(queries) / (time.perf_counter() - start)
     return RunResult(found=found, latencies=latencies, qps=qps)
 
@@ -349,7 +402,7 @@ def _write_report(
         f"- FAISS: CPU, 지연은 스레드 1개 · 질의 하나씩, `qps` 는 질의 {questions:,}개 일괄 · 스레드 {faiss.omp_get_max_threads()}개. "
         "`index_mb` 는 직렬화한 색인 크기\n"
         f"- Qdrant: 로컬 Docker, HNSW m=16 · ef_construct=100 + int8 스칼라 양자화(RAM) · 원본 벡터 on_disk. "
-        f"지연은 gRPC 왕복 포함 (REST 는 질의마다 약 16ms 더 든다), `qps` 는 요청 하나에 {QDRANT_BATCH}개씩 묶어 보냄. "
+        f"지연은 gRPC 왕복 포함 (REST 는 질의마다 약 16ms 더 든다), `qps` 는 요청 하나에 {args.qdrant_batch}개씩 묶어 보냄. "
         "색인 시간 · 크기는 적재 때라 비움\n"
         f"- 전원 · 장비: {args.machine}\n\n"
         f"![recall@10 – QPS]({run_id}.svg)\n\n"

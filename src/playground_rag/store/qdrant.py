@@ -77,12 +77,14 @@ class QdrantStore:
         """QDRANT_URL(기본 http://localhost:6333)로 접속한다. QDRANT_GRPC=0 이 아니면 gRPC(6334)를 쓴다.
 
         REST 는 질의 하나에 약 16ms 가 더 든다 (서버 검색 약 1.5ms, Windows + Docker Desktop 에서 측정).
-        gRPC 는 약 1.8ms.
+        gRPC 는 약 1.8ms. QDRANT_TIMEOUT(초)이 있으면 요청 시간 제한으로 쓴다 (없으면 클라이언트 기본 5초).
         """
+        timeout = os.environ.get("QDRANT_TIMEOUT")
         return cls(
             QdrantClient(
                 url=os.environ.get("QDRANT_URL", URL),
                 prefer_grpc=os.environ.get("QDRANT_GRPC", "1") != "0",
+                timeout=int(timeout) if timeout else None,
                 check_compatibility=False,
             )
         )

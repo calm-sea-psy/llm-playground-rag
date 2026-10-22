@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 380" width="800" height="380" font-family="system-ui, -apple-system, 'Segoe UI', 'Malgun Gothic', sans-serif">
+<style>.bg{fill:#fcfcfb} .t1{fill:#0b0b0b} .t2{fill:#52514e} .grid{stroke:#e4e3df} .axis{stroke:#a3a29c} .ref{fill:#8a8984;stroke:#8a8984} .line{fill:none;stroke-width:2} .s0{stroke:#2a78d6;fill:#2a78d6} .s1{stroke:#eb6834;fill:#eb6834} .s2{stroke:#1baf7a;fill:#1baf7a} .s3{stroke:#eda100;fill:#eda100} @media (prefers-color-scheme: dark){.bg{fill:#1a1a19} .t1{fill:#f0efec} .t2{fill:#c3c2b7} .grid{stroke:#33332f} .axis{stroke:#5c5b55} .ref{fill:#9b9a93;stroke:#9b9a93} .s0{stroke:#3987e5;fill:#3987e5} .s1{stroke:#d95926;fill:#d95926} .s2{stroke:#199e70;fill:#199e70} .s3{stroke:#c98500;fill:#c98500}}</style>
+<rect class="bg" width="800" height="380"/>
+<text class="t1" x="12" y="22" font-size="15" font-weight="600">recall@10 – QPS (2,393,485 벡터)</text>
+<text class="t1" x="56" y="52" font-size="13" font-weight="600">FAISS (CPU, 메모리)</text>
+<line class="grid" x1="56.0" y1="70" x2="56.0" y2="270"/>
+<text class="t2" x="56.0" y="286" font-size="11" text-anchor="middle">0.2</text>
+<line class="grid" x1="97.0" y1="70" x2="97.0" y2="270"/>
+<text class="t2" x="97.0" y="286" font-size="11" text-anchor="middle">0.3</text>
+<line class="grid" x1="138.0" y1="70" x2="138.0" y2="270"/>
+<text class="t2" x="138.0" y="286" font-size="11" text-anchor="middle">0.4</text>
+<line class="grid" x1="179.0" y1="70" x2="179.0" y2="270"/>
+<text class="t2" x="179.0" y="286" font-size="11" text-anchor="middle">0.5</text>
+<line class="grid" x1="220.0" y1="70" x2="220.0" y2="270"/>
+<text class="t2" x="220.0" y="286" font-size="11" text-anchor="middle">0.6</text>
+<line class="grid" x1="261.0" y1="70" x2="261.0" y2="270"/>
+<text class="t2" x="261.0" y="286" font-size="11" text-anchor="middle">0.7</text>
+<line class="grid" x1="302.0" y1="70" x2="302.0" y2="270"/>
+<text class="t2" x="302.0" y="286" font-size="11" text-anchor="middle">0.8</text>
+<line class="grid" x1="343.0" y1="70" x2="343.0" y2="270"/>
+<text class="t2" x="343.0" y="286" font-size="11" text-anchor="middle">0.9</text>
+<line class="grid" x1="384.0" y1="70" x2="384.0" y2="270"/>
+<text class="t2" x="384.0" y="286" font-size="11" text-anchor="middle">1.0</text>
+<line class="grid" x1="56" y1="270.0" x2="384" y2="270.0"/>
+<text class="t2" x="50" y="274.0" font-size="11" text-anchor="end">1</text>
+<line class="grid" x1="56" y1="230.0" x2="384" y2="230.0"/>
+<text class="t2" x="50" y="234.0" font-size="11" text-anchor="end">10</text>
+<line class="grid" x1="56" y1="190.0" x2="384" y2="190.0"/>
+<text class="t2" x="50" y="194.0" font-size="11" text-anchor="end">100</text>
+<line class="grid" x1="56" y1="150.0" x2="384" y2="150.0"/>
+<text class="t2" x="50" y="154.0" font-size="11" text-anchor="end">1,000</text>
+<line class="grid" x1="56" y1="110.0" x2="384" y2="110.0"/>
+<text class="t2" x="50" y="114.0" font-size="11" text-anchor="end">10,000</text>
+<line class="grid" x1="56" y1="70.0" x2="384" y2="70.0"/>
+<text class="t2" x="50" y="74.0" font-size="11" text-anchor="end">100,000</text>
+<line class="axis" x1="56" y1="270" x2="384" y2="270"/>
+<text class="t2" x="220.0" y="304" font-size="11" text-anchor="middle">recall@10 (FAISS Flat 대비)</text>
+<text class="t2" font-size="11" text-anchor="middle" transform="translate(14,170.0) rotate(-90)">QPS (로그)</text>
+<circle class="ref" cx="384.0" cy="181.0" r="4.5"/>
+<polyline class="line s0" style="fill:none" points="258.2,102.5 301.3,111.1 330.2,119.6 350.6,128.8 364.1,139.3"/>
+<circle class="s0" cx="258.2" cy="102.5" r="4.5"/>
+<circle class="s0" cx="301.3" cy="111.1" r="4.5"/>
+<circle class="s0" cx="330.2" cy="119.6" r="4.5"/>
+<circle class="s0" cx="350.6" cy="128.8" r="4.5"/>
+<circle class="s0" cx="364.1" cy="139.3" r="4.5"/>
+<polyline class="line s1" style="fill:none" points="89.6,107.6 183.6,121.7 273.1,138.6 334.3,161.8"/>
+<rect class="s1" x="85.1" y="103.1" width="9.0" height="9.0" rx="1"/>
+<rect class="s1" x="179.1" y="117.2" width="9.0" height="9.0" rx="1"/>
+<rect class="s1" x="268.6" y="134.1" width="9.0" height="9.0" rx="1"/>
+<rect class="s1" x="329.8" y="157.3" width="9.0" height="9.0" rx="1"/>
+<polyline class="line s2" style="fill:none" points="183.4,128.0 272.6,147.3 333.2,170.0"/>
+<polygon class="s2" points="183.4,122.5 188.9,132.5 177.9,132.5"/>
+<polygon class="s2" points="272.6,141.8 278.1,151.8 267.1,151.8"/>
+<polygon class="s2" points="333.2,164.5 338.7,174.5 327.7,174.5"/>
+<polyline class="line s3" style="fill:none" points="150.5,105.7 202.7,114.4 225.9,130.7"/>
+<polygon class="s3" points="150.5,100.2 156.0,105.7 150.5,111.2 145.0,105.7"/>
+<polygon class="s3" points="202.7,108.9 208.2,114.4 202.7,119.9 197.2,114.4"/>
+<polygon class="s3" points="225.9,125.2 231.4,130.7 225.9,136.2 220.4,130.7"/>
+<circle class="ref" cx="61.0" cy="318.0" r="4.5"/>
+<text class="t1" x="72" y="322" font-size="11">Flat (전수 비교)</text>
+<circle class="s0" cx="231.0" cy="318.0" r="4.5"/>
+<text class="t1" x="242" y="322" font-size="11">HNSW32</text>
+<rect class="s1" x="56.5" y="331.5" width="9.0" height="9.0" rx="1"/>
+<text class="t1" x="72" y="340" font-size="11">IVF4096,Flat</text>
+<polygon class="s2" points="231.0,330.5 236.5,340.5 225.5,340.5"/>
+<text class="t1" x="242" y="340" font-size="11">IVF4096,SQ8</text>
+<polygon class="s3" points="61.0,348.5 66.5,354.0 61.0,359.5 55.5,354.0"/>
+<text class="t1" x="72" y="358" font-size="11">IVF4096,PQ128</text>
+<text class="t1" x="456" y="52" font-size="13" font-weight="600">Qdrant (Docker, gRPC)</text>
+<line class="grid" x1="456.0" y1="70" x2="456.0" y2="270"/>
+<text class="t2" x="456.0" y="286" font-size="11" text-anchor="middle">0.2</text>
+<line class="grid" x1="497.0" y1="70" x2="497.0" y2="270"/>
+<text class="t2" x="497.0" y="286" font-size="11" text-anchor="middle">0.3</text>
+<line class="grid" x1="538.0" y1="70" x2="538.0" y2="270"/>
+<text class="t2" x="538.0" y="286" font-size="11" text-anchor="middle">0.4</text>
+<line class="grid" x1="579.0" y1="70" x2="579.0" y2="270"/>
+<text class="t2" x="579.0" y="286" font-size="11" text-anchor="middle">0.5</text>
+<line class="grid" x1="620.0" y1="70" x2="620.0" y2="270"/>
+<text class="t2" x="620.0" y="286" font-size="11" text-anchor="middle">0.6</text>
+<line class="grid" x1="661.0" y1="70" x2="661.0" y2="270"/>
+<text class="t2" x="661.0" y="286" font-size="11" text-anchor="middle">0.7</text>
+<line class="grid" x1="702.0" y1="70" x2="702.0" y2="270"/>
+<text class="t2" x="702.0" y="286" font-size="11" text-anchor="middle">0.8</text>
+<line class="grid" x1="743.0" y1="70" x2="743.0" y2="270"/>
+<text class="t2" x="743.0" y="286" font-size="11" text-anchor="middle">0.9</text>
+<line class="grid" x1="784.0" y1="70" x2="784.0" y2="270"/>
+<text class="t2" x="784.0" y="286" font-size="11" text-anchor="middle">1.0</text>
+<line class="grid" x1="456" y1="270.0" x2="784" y2="270.0"/>
+<text class="t2" x="450" y="274.0" font-size="11" text-anchor="end">1</text>
+<line class="grid" x1="456" y1="230.0" x2="784" y2="230.0"/>
+<text class="t2" x="450" y="234.0" font-size="11" text-anchor="end">10</text>
+<line class="grid" x1="456" y1="190.0" x2="784" y2="190.0"/>
+<text class="t2" x="450" y="194.0" font-size="11" text-anchor="end">100</text>
+<line class="grid" x1="456" y1="150.0" x2="784" y2="150.0"/>
+<text class="t2" x="450" y="154.0" font-size="11" text-anchor="end">1,000</text>
+<line class="grid" x1="456" y1="110.0" x2="784" y2="110.0"/>
+<text class="t2" x="450" y="114.0" font-size="11" text-anchor="end">10,000</text>
+<line class="grid" x1="456" y1="70.0" x2="784" y2="70.0"/>
+<text class="t2" x="450" y="74.0" font-size="11" text-anchor="end">100,000</text>
+<line class="axis" x1="456" y1="270" x2="784" y2="270"/>
+<text class="t2" x="620.0" y="304" font-size="11" text-anchor="middle">recall@10 (FAISS Flat 대비)</text>
+<text class="t2" font-size="11" text-anchor="middle" transform="translate(414,170.0) rotate(-90)">QPS (로그)</text>
+<polyline class="line s0" style="fill:none" points="728.9,245.9 753.5,258.0"/>
+<circle class="s0" cx="728.9" cy="245.9" r="4.5"/>
+<circle class="s0" cx="753.5" cy="258.0" r="4.5"/>
+<polyline class="line s1" style="fill:none" points="721.7,182.5 743.6,183.5 757.4,185.7 764.4,181.4 766.6,189.0"/>
+<rect class="s1" x="717.2" y="178.0" width="9.0" height="9.0" rx="1"/>
+<rect class="s1" x="739.1" y="179.0" width="9.0" height="9.0" rx="1"/>
+<rect class="s1" x="752.9" y="181.2" width="9.0" height="9.0" rx="1"/>
+<rect class="s1" x="759.9" y="176.9" width="9.0" height="9.0" rx="1"/>
+<rect class="s1" x="762.1" y="184.5" width="9.0" height="9.0" rx="1"/>
+<polyline class="line s2" style="fill:none" points="739.1,183.9 753.7,184.5 769.6,186.3 778.1,181.1 781.0,189.0"/>
+<polygon class="s2" points="739.1,178.4 744.6,188.4 733.6,188.4"/>
+<polygon class="s2" points="753.7,179.0 759.2,189.0 748.2,189.0"/>
+<polygon class="s2" points="769.6,180.8 775.1,190.8 764.1,190.8"/>
+<polygon class="s2" points="778.1,175.6 783.6,185.6 772.6,185.6"/>
+<polygon class="s2" points="781.0,183.5 786.5,193.5 775.5,193.5"/>
+<circle class="s0" cx="461.0" cy="318.0" r="4.5"/>
+<text class="t1" x="472" y="322" font-size="11">HNSW float</text>
+<rect class="s1" x="626.5" y="313.5" width="9.0" height="9.0" rx="1"/>
+<text class="t1" x="642" y="322" font-size="11">HNSW int8</text>
+<polygon class="s2" points="461.0,330.5 466.5,340.5 455.5,340.5"/>
+<text class="t1" x="472" y="340" font-size="11">HNSW int8+rescore x2</text>
+</svg>
