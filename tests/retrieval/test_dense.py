@@ -14,6 +14,7 @@ from qdrant_client.http.exceptions import ResponseHandlingException
 from playground_rag.core import Filters
 from playground_rag.retrieval import DenseRetriever
 from playground_rag.store import PgConfig, PgStore, QdrantStore, VectorHit
+from playground_rag.store.qdrant import URL as QDRANT_URL
 
 _SPEC = EmbeddingModelSpec(name="fake", model_id="test/fake", dim=3, max_seq_length=16)
 _VECTORS = {"서울": [1.0, 0.0, 0.0], "파리": [0.0, 1.0, 0.0], "수도": [0.7, 0.7, 0.0]}
@@ -84,10 +85,11 @@ def stores() -> Iterator[tuple[PgStore, QdrantStore, str]]:
     name = f"test_{uuid.uuid4().hex[:8]}"
     try:
         conn = psycopg.connect(PgConfig.from_env().conninfo, connect_timeout=2)
-        client = QdrantClient(url="http://localhost:6333", timeout=2, check_compatibility=False)
-        client.get_collections()
+        QdrantClient(url=QDRANT_URL, timeout=2, check_compatibility=False).get_collections()
     except (psycopg.OperationalError, ResponseHandlingException):
         pytest.skip("PG · Qdrant 가 떠 있지 않음 (docker compose up)")
+    # 떠 있는지는 2초로 보고, 컬렉션 생성 같은 작업은 넉넉히 기다린다 (CI 러너에서 2초를 넘긴 적이 있다)
+    client = QdrantClient(url=QDRANT_URL, timeout=30, check_compatibility=False)
     conn.execute(f"CREATE SCHEMA {name}")
     conn.execute(f"SET search_path TO {name}")
     conn.commit()

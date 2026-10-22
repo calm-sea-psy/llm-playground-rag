@@ -11,6 +11,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.http.exceptions import ResponseHandlingException
 
 from playground_rag.store import PgConfig, PgStore, QdrantStore, chunk_payload, point_id
+from playground_rag.store.qdrant import URL as QDRANT_URL
 
 DOCS = [
     Document(
@@ -113,11 +114,12 @@ def test_pg_records_ingest_runs(pg: PgStore):
 
 @pytest.fixture
 def qdrant() -> Iterator[tuple[QdrantStore, str]]:
-    client = QdrantClient(url="http://localhost:6333", timeout=2, check_compatibility=False)
     try:
-        client.get_collections()
+        QdrantClient(url=QDRANT_URL, timeout=2, check_compatibility=False).get_collections()
     except ResponseHandlingException:  # 접속 실패를 qdrant-client 가 감싸서 던진다
         pytest.skip("Qdrant 가 떠 있지 않음 (docker compose up)")
+    # 떠 있는지는 2초로 보고, 컬렉션 생성 같은 작업은 넉넉히 기다린다 (CI 러너에서 2초를 넘긴 적이 있다)
+    client = QdrantClient(url=QDRANT_URL, timeout=30, check_compatibility=False)
     name = f"test_{uuid.uuid4().hex[:8]}"
     store = QdrantStore(client)
     try:
