@@ -16,19 +16,17 @@ hit@k 가 전체 코퍼스보다 높게 나온다 — 전체 수치와 비교하
 import argparse
 import json
 import random
-import re
-import unicodedata
 from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.parquet as pq
 import yaml
+from playground_evalkit import korquad_title, normalize_title
 
 SUBSET_SIZE = 10_000  # 임베딩 3종 × 청크 크기 3종 비교를 한 번에 수십 분 안에 돌릴 수 있는 크기
 SEED = 20261022
 KORQUAD_DEV = Path("data/korquad/KorQuAD_v1.0_dev.json")
-KORQUAD_COLON = "__"  # KorQuAD 제목은 쌍점을 밑줄 두 개로 적는다 (커맨드_앤_컨커_3__타이베리움_워)
 
 # KorQuAD(2018) 이후 넘겨주기 없이 이름이 바뀐 문서. 후보 문서 본문에 KorQuAD 정답이 들어 있는지로 확인 (2026-10-22)
 #   김정남 15/15 · 윤정훈 14/14 · 김홍집 8/18 (문서가 크게 고쳐졌지만 같은 인물)
@@ -37,7 +35,6 @@ RENAMED_TITLES = {
     "김홍집 (1842년)": "김홍집",
     "윤정훈": "윤정훈 (목사)",
 }
-_SPACES = re.compile(r"\s+")
 
 
 def main() -> None:
@@ -62,7 +59,7 @@ def main() -> None:
     via_rename: list[str] = []
     missing: list[str] = []
     for original in korquad_titles:
-        title = normalize_title(original.replace(KORQUAD_COLON, ": "))
+        title = korquad_title(original)
         if title in title_to_index:
             matched[original] = title
         elif aliases.get(title) in title_to_index:
@@ -102,11 +99,6 @@ def main() -> None:
         json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     print(json.dumps(summary, ensure_ascii=False, indent=2))
-
-
-def normalize_title(title: str) -> str:
-    """NFC · 밑줄 → 공백 · 연속 공백 정리. playground_evalkit.normalize_title 이 생기면 그것으로 바꾼다."""
-    return _SPACES.sub(" ", unicodedata.normalize("NFC", title).replace("_", " ")).strip()
 
 
 def _parse_args() -> argparse.Namespace:

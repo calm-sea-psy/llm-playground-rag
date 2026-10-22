@@ -587,6 +587,11 @@ dev = [
 ]
 
 [[package]]
+name = "playground-evalkit"
+version = "0.0.0"
+source = { editable = "../llm-playground-llm/packages/evalkit" }
+
+[[package]]
 name = "playground-rag"
 version = "0.1.0"
 source = { editable = "." }
@@ -594,6 +599,7 @@ dependencies = [
     { name = "lxml" },
     { name = "mwparserfromhell" },
     { name = "playground-corpus", extra = ["local", "parquet"] },
+    { name = "playground-evalkit" },
     { name = "pyyaml" },
     { name = "torch" },
 ]
@@ -609,6 +615,7 @@ requires-dist = [
     { name = "lxml", specifier = ">=6.1.3" },
     { name = "mwparserfromhell", specifier = ">=0.7.2" },
     { name = "playground-corpus", extras = ["parquet", "local"], editable = "../llm-playground-corpus" },
+    { name = "playground-evalkit", editable = "../llm-playground-llm/packages/evalkit" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "torch", specifier = ">=2.11.0", index = "https://download.pytorch.org/whl/cu128" },
 ]
