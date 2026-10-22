@@ -90,7 +90,7 @@ class WikiSource:
         정제는 여러 프로세스에서 하고, 결과 순서는 덤프 순서를 지킨다.
         """
         process = partial(
-            _process_page,
+            parse_page,
             cleaner=self._cleaner,
             dump_date=self._dump_date,
             min_chars=self._min_chars,
@@ -140,9 +140,10 @@ def _release(elem: etree._Element) -> None:
         del parent[0]
 
 
-def _process_page(
+def parse_page(
     page: RawPage, *, cleaner: WikiCleaner, dump_date: str, min_chars: int
 ) -> ParsedPage:
+    """문서 하나를 넘겨주기 · 걸러진 문서 · 본문 문서 중 하나로 바꾼다. 정제 규칙 점검 스크립트도 이 판정을 쓴다."""
     head = page.wikitext.lstrip()[:20].lower()
     if head.startswith(REDIRECT_MARKERS):
         target = page.wikitext.split("[[", 1)[-1].split("]]", 1)[0].split("#", 1)[0].strip()

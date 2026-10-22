@@ -61,14 +61,33 @@ MATH_TAG = "math"
 MAX_INLINE_MATH_CHARS = 40
 
 # 둘째 위치 인자가 원어 표기인 틀. 셋째는 한글 전사라 뺀다 ({{llang|en|Leslie Cheung|레슬리 청}} → Leslie Cheung)
-ORIGINAL_TEXT_TEMPLATES = frozenset({"lang", "llang"})
+# 둘째가 비면(안쪽 문자 전용 틀 {{MongolUnicode|…}} 가 지워진 경우) 다음 비지 않은 인자 (로마자 표기 등)
+ORIGINAL_TEXT_TEMPLATES = frozenset({"lang", "llang", "langnf"})
 ORIGINAL_TEXT_INDEX = 1  # 0 은 언어 코드
 
-# 마지막 위치 인자가 본문에 드러나는 글자인 틀 ({{lang-en|Seoul}} · {{국기|가나}})
-KEEP_LAST_PARAM_TEMPLATES = frozenset({"국기", "국기나라", "깃발나라", "nowrap"})
+# 마지막 위치 인자가 본문에 드러나는 글자인 틀 ({{lang-en|Seoul}} · {{국기|가나}} · {{transl|grc|Isaak}})
+KEEP_LAST_PARAM_TEMPLATES = frozenset(
+    {"국기", "국기나라", "깃발나라", "nowrap", "transl", "transliteration"}
+)
 
 # 첫 위치 인자가 본문 글자인 틀 ({{한자|大韓民國}} · {{학명|Hordeum vulgare}} · {{ruby-ja|同人誌|どうじんし}})
-FIRST_PARAM_TEMPLATES = frozenset({"한자", "한국 한자", "학명", "ruby-ja", "후리가나", "후리가나2"})
+FIRST_PARAM_TEMPLATES = frozenset(
+    {
+        "한자",
+        "한국 한자",
+        "학명",
+        "ruby",
+        "ruby-ja",
+        "후리가나",
+        "후리가나2",
+        "중세 국어",
+        "히브리어 이름",
+        "임시링크",  # {{임시링크|표시 제목|언어|원어 제목}}
+    }
+)
+
+# 위치 인자를 이어 붙여 한 단어로 보이는 틀 ({{linktext|行星|分化}} → 行星分化)
+JOIN_PARAMS_TEMPLATES = frozenset({"linktext"})
 
 # 이름표를 붙여 첫 위치 인자를 보이는 틀 ({{본명|전해림}} → 본명 전해림)
 LABELED_TEMPLATES = frozenset({"본명", "문화어", "표준어"})
@@ -113,6 +132,9 @@ _FOOTNOTE_MARK = re.compile(r"\[(?:\d+|주 \d+|각주 \d+)\]")
 _LEFTOVER_BRACKETS = re.compile(r"\[\[|\]\]|\{\{|\}\}")
 _SPACE_BEFORE_PUNCT = re.compile(r"[ \t]+([.,])")  # 지운 각주 · 틀 자리에 남은 공백
 _EMPTY_PARENS = re.compile(r"[(（]\s*[,;、]?\s*[)）]")
+# 괄호 첫머리 · 끝의 구분자 — 발음 기호 틀({{IPA|…}})처럼 일부러 지운 틀 자리에 남는다: "(, X)" · "(; X; )"
+_PAREN_LEADING_SEP = re.compile(r"([(（])[ \t]*[,;、][ \t]*")
+_PAREN_TRAILING_SEP = re.compile(r"[ \t]*(?<!\\)[,;、][ \t]*([)）])")  # LaTeX \, (얇은 공백)는 둔다
 _SPACES = re.compile(r"[ \t\u00a0\u200b]+")  # 공백 · 탭 · NBSP · zero-width space
 _SPACE_AROUND_NEWLINE = re.compile(r" *\n *")
 _MANY_NEWLINES = re.compile(r"\n{3,}")
@@ -194,7 +216,9 @@ def clean_text(text: str) -> str:
     text = _MAGIC_WORD.sub("", text)
     text = _FOOTNOTE_MARK.sub("", text)
     text = _LEFTOVER_BRACKETS.sub("", text)
-    text = _EMPTY_PARENS.sub("", text)
+    text = _PAREN_LEADING_SEP.sub(r"\1", text)
+    text = _PAREN_TRAILING_SEP.sub(r"\1", text)
+    text = _EMPTY_PARENS.sub("", text)  # 구분자를 걷은 뒤 빈 괄호 "(; )" → "()" 를 지운다
     text = _SPACES.sub(" ", text)
     text = _SPACE_BEFORE_PUNCT.sub(r"\1", text)
     text = _SPACE_AROUND_NEWLINE.sub("\n", text)
@@ -266,8 +290,11 @@ def _template_text(name: str, template: Template) -> str:
     if not positional:
         return ""
     if name in ORIGINAL_TEXT_TEMPLATES:
-        has_original = len(positional) > ORIGINAL_TEXT_INDEX
-        return positional[ORIGINAL_TEXT_INDEX] if has_original else positional[-1]
+        if len(positional) <= ORIGINAL_TEXT_INDEX:
+            return positional[-1]
+        return next((p for p in positional[ORIGINAL_TEXT_INDEX:] if p), "")
+    if name in JOIN_PARAMS_TEMPLATES:
+        return "".join(positional)
     if name in KEEP_LAST_PARAM_TEMPLATES or name.startswith("lang-"):
         return positional[-1]
     if name in FIRST_PARAM_TEMPLATES:

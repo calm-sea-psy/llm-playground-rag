@@ -78,6 +78,38 @@ def test_clean_keeps_lead_parenthesis_templates():
     )
 
 
+def test_clean_keeps_more_lead_text_templates():
+    page = _clean(
+        "'''도시락'''({{중세 국어|도슭}}). "
+        "'''푸런'''({{llang|mnc|{{만몽 유니코드|ᠠᡳᠰᡳᠨ}}|Aisin Gioro Pu Ren}}). "
+        "'''이삭'''({{히브리어 이름|יִצְחָק|Yitskhak}}, {{transl|grc|''Isaak''}}). "
+        "'''분화'''({{linktext|行星|分化}}). '''NSK'''({{langnf|de||뉴 슬로베니안 아트}}). "
+        "'''멜니크'''({{llang|uk|{{임시링크|Андрій Мельник|uk|Мельник Андрій}}}}). "
+        "'''바쿠'''({{lang|ja|{{ruby|井手上|いでがみ}}}})."
+    )
+
+    assert page.text == (
+        "도시락(도슭). 푸런(Aisin Gioro Pu Ren). 이삭(יִצְחָק, Isaak). 분화(行星分化). "
+        "NSK(뉴 슬로베니안 아트). 멜니크(Андрій Мельник). 바쿠(井手上)."
+    )
+
+
+def test_clean_removes_separators_left_by_dropped_templates():
+    page = _clean(
+        "'''Xfce'''({{IPA|[ɛks ɛf siː iː]}}, 엑스에프시이). "
+        "'''NSK'''({{IPA|de|ˈnɔʏə|lang}}; '''NSK'''; {{IPA|de|x}}). "
+        "'''옹프레''' ({{IPA|fr|miʃɛl|lang}}; 1959년 출생). '''빈칸'''({{IPA|x}}; {{IPA|y}})."
+    )
+
+    assert page.text == "Xfce(엑스에프시이). NSK(NSK). 옹프레 (1959년 출생). 빈칸."
+
+
+def test_clean_keeps_latex_thin_space_before_parenthesis():
+    page = _clean(r"각가속도는 알파 (<math>{\alpha}\,</math>)로 표시한다.")
+
+    assert page.text == r"각가속도는 알파 ({\alpha}\,)로 표시한다."
+
+
 def test_clean_rewrites_nested_templates_from_the_inside():
     page = _clean(
         "'''니시토쿄시'''({{llang|ja|{{ruby-ja|西東京市|にしとうきょうし}}}}, {{문화어|니시도꾜시}})는 시이다."
