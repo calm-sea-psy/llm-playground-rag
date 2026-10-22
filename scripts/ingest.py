@@ -4,7 +4,7 @@
 같은 키로 다시 넣으면 덮어쓰므로 중단된 뒤 다시 돌려도 된다.
 
 사용법:
-  uv run python scripts/ingest.py --parsed data/parsed/kowiki-subset-10000 --model bge-m3
+  uv run python scripts/ingest.py --parsed data/parsed/kowiki-subset-10000          # 선정 모델 (configs)
   uv run python scripts/ingest.py --parsed data/parsed/kowiki-subset-10000 --model bge-m3 --limit-docs 300 --collection smoke
 """
 
@@ -31,7 +31,7 @@ def main() -> None:
     config = yaml.safe_load(args.config.read_text(encoding="utf-8"))
     source = config["source"]["name"]
     chunking = config["chunking"]
-    spec = EMBEDDING_MODELS[args.model]
+    spec = EMBEDDING_MODELS[args.model or config["embedding"]["model"]]
     collection = args.collection or config["store"]["collection"].format(
         source=args.parsed.name, model=spec.name
     )
@@ -93,7 +93,12 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--config", type=Path, default=Path("configs/ingest.yaml"))
     parser.add_argument("--parsed", type=Path, required=True, help="docs-*.parquet 가 있는 폴더")
-    parser.add_argument("--model", required=True, choices=list(EMBEDDING_MODELS))
+    parser.add_argument(
+        "--model",
+        default="",
+        choices=["", *EMBEDDING_MODELS],
+        help="비우면 configs/ingest.yaml 의 embedding.model",
+    )
     parser.add_argument(
         "--max-tokens",
         type=int,

@@ -7,13 +7,18 @@ source:
   min_chars: 200          # 본문이 이보다 짧은 stub 문서 제외
   parsed_dir: data/parsed
 
+# 청킹 · 임베딩 값은 llm-playground-corpus 의 선정 결과에서 옮긴다 (D8, 2026-10-22)
+selected_by: "llm-playground-corpus@300c915:models/kure-v1.yaml"
+
 chunking:
-  max_tokens: 384         # Phase 1 에서 256 / 384 / 512 비교 후 결정
+  max_tokens: 384         # 리랭커를 붙이면 384 가 256 과 같거나 높고 벡터가 약 22% 적다
   overlap_ratio: 0.15     # 10~20% 범위
   min_chars: 50           # 이보다 짧은 청크 제외
 
 embedding:
-  model: null             # Phase 1 에서 bge-m3 / KURE-v1 / KoE5 비교 후 결정
+  model: kure-v1          # 모든 청크 크기에서 bge-m3 · KoE5 보다 hit@5 4~5%p 높다
+  # 토크나이저가 바뀌면 재청킹한다 — 선정 결과의 tokenizer.json sha256
+  tokenizer_json_sha256: fb3c3b93c46fd5a8634e262e1b7de7da11a18b527aa2282b312952b692781dfd
   batch_size: 64
   fp16: true
   output_dir: data/emb
