@@ -61,6 +61,54 @@ def test_clean_rewrites_text_bearing_templates():
     assert page.text == "카터(Jimmy Carter, 1924년 10월 1일)는 USS 폼프렛에서 복무했다."
 
 
+def test_clean_keeps_lead_parenthesis_templates():
+    page = _clean(
+        "'''하지원'''({{본명|전해림}}, 1978년 ~ ). "
+        "'''장국영'''({{zh|order=t|t=張國榮|s=张国荣|p=Zhāng Guóróng}}, "
+        "{{llang|en|Leslie Cheung|레슬리 청}}). "
+        "'''대한민국'''({{한자|大韓民國}}). '''보리'''({{학명|Hordeum vulgare}}). "
+        "'''로봇'''({{문화어|로보트}}). '''비엣남'''({{vie|v=Việt Nam|hn=越南}}). "
+        "'''동인지'''({{Ruby-ja|同人誌|どうじんし}})."
+    )
+
+    assert page.text == (
+        "하지원(본명 전해림, 1978년 ~ ). 장국영(張國榮, Leslie Cheung). "
+        "대한민국(大韓民國). 보리(Hordeum vulgare). 로봇(문화어 로보트). "
+        "비엣남(Việt Nam). 동인지(同人誌)."
+    )
+
+
+def test_clean_rewrites_nested_templates_from_the_inside():
+    page = _clean(
+        "'''니시토쿄시'''({{llang|ja|{{ruby-ja|西東京市|にしとうきょうし}}}}, {{문화어|니시도꾜시}})는 시이다."
+    )
+
+    assert page.text == "니시토쿄시(西東京市, 문화어 니시도꾜시)는 시이다."
+
+
+def test_clean_keeps_short_inline_math_as_latex():
+    page = _clean(
+        "어떤 모수 <math>\\theta</math> 로 결정되는 가능도 <math>L( \\theta )</math> 는 다음과 같다."
+    )
+
+    assert page.text == "어떤 모수 \\theta 로 결정되는 가능도 L( \\theta ) 는 다음과 같다."
+
+
+def test_clean_keeps_absolute_value_bars_in_inline_math():
+    page = _clean("거리는 <math>\\frac{1+|z|}{1-|z|}</math> 이다.")
+
+    assert page.text == "거리는 \\frac{1+|z|}{1-|z|} 이다."
+
+
+def test_clean_drops_long_and_block_math():
+    long_formula = "\\prod_{i=1}^{n} f(x_i \\mid \\mu, \\sigma^2) = (2\\pi\\sigma^2)^{-n/2} e^{-1}"
+    page = _clean(
+        f'가능도는 <math>{long_formula}</math> 이다. 블록 <math display="block">x</math> 끝.'
+    )
+
+    assert page.text == "가능도는 이다. 블록 끝."
+
+
 def test_clean_detects_disambiguation_by_template():
     assert _clean("'''소수'''는 다음을 가리킨다.\n{{동음이의}}").is_disambiguation
 

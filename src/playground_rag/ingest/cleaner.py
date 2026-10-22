@@ -39,7 +39,6 @@ DROP_TAGS = frozenset(
         "ref",
         "references",
         "gallery",
-        "math",
         "chem",
         "ce",
         "timeline",
@@ -56,8 +55,27 @@ DROP_TAGS = frozenset(
     }
 )
 
-# 마지막 위치 인자가 본문에 드러나는 글자인 틀 ({{lang|en|Seoul}} → Seoul)
-KEEP_LAST_PARAM_TEMPLATES = frozenset({"lang", "llang", "국기", "국기나라", "깃발나라", "nowrap"})
+# 수식은 문장 사이의 짧은 인라인 수식만 LaTeX 원문으로 남긴다. 지우면 "어떤 모수 로 결정되는" 처럼 문장이 깨지고,
+# 긴 블록 수식은 임베딩 · BM25 에 잡음만 더한다. 40자면 L(\theta) · \frac{a}{b} · \sum_{i=1}^n x_i 정도까지 들어간다
+MATH_TAG = "math"
+MAX_INLINE_MATH_CHARS = 40
+
+# 둘째 위치 인자가 원어 표기인 틀. 셋째는 한글 전사라 뺀다 ({{llang|en|Leslie Cheung|레슬리 청}} → Leslie Cheung)
+ORIGINAL_TEXT_TEMPLATES = frozenset({"lang", "llang"})
+ORIGINAL_TEXT_INDEX = 1  # 0 은 언어 코드
+
+# 마지막 위치 인자가 본문에 드러나는 글자인 틀 ({{lang-en|Seoul}} · {{국기|가나}})
+KEEP_LAST_PARAM_TEMPLATES = frozenset({"국기", "국기나라", "깃발나라", "nowrap"})
+
+# 첫 위치 인자가 본문 글자인 틀 ({{한자|大韓民國}} · {{학명|Hordeum vulgare}} · {{ruby-ja|同人誌|どうじんし}})
+FIRST_PARAM_TEMPLATES = frozenset({"한자", "한국 한자", "학명", "ruby-ja", "후리가나", "후리가나2"})
+
+# 이름표를 붙여 첫 위치 인자를 보이는 틀 ({{본명|전해림}} → 본명 전해림)
+LABELED_TEMPLATES = frozenset({"본명", "문화어", "표준어"})
+
+# 중국어 표기 틀은 이름 인자로 받는다. 번체 → 원문 → 간체 순으로 있는 것 하나
+CHINESE_TEMPLATE_PREFIXES = ("zh", "lang-zh")
+CHINESE_TEXT_KEYS = ("t", "c", "s")
 
 # 첫 세 위치 인자가 연 · 월 · 일인 날짜 틀. KorQuAD 에 생몰일 질문이 많아 날짜를 살린다
 DATE_TEMPLATES = frozenset(
@@ -91,7 +109,8 @@ _LIST_MARKER = re.compile(
 )  # 앞의 수식을 지우면 공백 뒤에 남는다
 _MAGIC_WORD = re.compile(r"__[A-Z]+__")  # __NOTOC__ · __TOC__ 등
 _FOOTNOTE_MARK = re.compile(r"\[(?:\d+|주 \d+|각주 \d+)\]")
-_LEFTOVER_BRACKETS = re.compile(r"\[\[|\]\]|\{\{|\}\}|\{\||\|\}")
+# 표 시작 · 끝({| · |})은 _TABLE_LINE 이 줄 단위로 지운다. 줄 중간의 {| · |} 는 LaTeX(\frac{1+|z|}{…}) 라 남긴다
+_LEFTOVER_BRACKETS = re.compile(r"\[\[|\]\]|\{\{|\}\}")
 _SPACE_BEFORE_PUNCT = re.compile(r"[ \t]+([.,])")  # 지운 각주 · 틀 자리에 남은 공백
 _EMPTY_PARENS = re.compile(r"[(（]\s*[,;、]?\s*[)）]")
 _SPACES = re.compile(r"[ \t\u00a0\u200b]+")  # 공백 · 탭 · NBSP · zero-width space
@@ -207,13 +226,25 @@ def _pop_links(code: Wikicode) -> list[str]:
 
 def _drop_tags(code: Wikicode) -> None:
     for tag in code.filter_tags(recursive=True):
-        if str(tag.tag).strip().lower() in DROP_TAGS:
+        name = str(tag.tag).strip().lower()
+        if name in DROP_TAGS:
             _remove(code, tag)
+        elif name == MATH_TAG:
+            _replace(code, tag, _inline_math(tag))
+
+
+def _inline_math(tag: Tag) -> str:
+    """짧은 인라인 수식은 LaTeX 원문 한 줄로, 블록 수식 · 긴 수식은 빈 문자열로."""
+    if tag.has("display") and str(tag.get("display").value).strip().lower() == "block":
+        return ""
+    latex = " ".join(str(tag.contents).split())
+    return latex if len(latex) <= MAX_INLINE_MATH_CHARS else ""
 
 
 def _rewrite_templates(code: Wikicode) -> None:
     """글자가 드러나는 틀은 그 글자로 바꾸고 나머지 틀은 지운다."""
-    for template in code.filter_templates(recursive=True):
+    # 안쪽 틀부터 바꾼다. 바깥부터 바꾸면 {{llang|ja|{{ruby-ja|西東京市|…}}}} 의 안쪽 틀이 원문째 남았다가 지워진다
+    for template in reversed(code.filter_templates(recursive=True)):
         name = str(template.name).strip().lower()
         replacement = _template_text(name, template)
         _replace(code, template, replacement)
@@ -221,12 +252,30 @@ def _rewrite_templates(code: Wikicode) -> None:
 
 def _template_text(name: str, template: Template) -> str:
     positional = [str(param.value).strip() for param in template.params if not param.showkey]
+    named = {
+        str(param.name).strip(): str(param.value).strip()
+        for param in template.params
+        if param.showkey
+    }
     if name in DATE_TEMPLATES:
         return _format_date(positional[:3])
-    if name in KEEP_LAST_PARAM_TEMPLATES or name.startswith(("lang-", "llang")):
-        return positional[-1] if positional else ""
+    if name.startswith(CHINESE_TEMPLATE_PREFIXES):
+        return next((named[key] for key in CHINESE_TEXT_KEYS if named.get(key)), "")
+    if name == "vie":
+        return named.get("v", "")
+    if not positional:
+        return ""
+    if name in ORIGINAL_TEXT_TEMPLATES:
+        has_original = len(positional) > ORIGINAL_TEXT_INDEX
+        return positional[ORIGINAL_TEXT_INDEX] if has_original else positional[-1]
+    if name in KEEP_LAST_PARAM_TEMPLATES or name.startswith("lang-"):
+        return positional[-1]
+    if name in FIRST_PARAM_TEMPLATES:
+        return positional[0]
+    if name in LABELED_TEMPLATES:
+        return f"{name} {positional[0]}"
     if name in SHIP_PREFIX_TEMPLATES:
-        return f"{name.upper()} {positional[0]}" if positional else ""
+        return f"{name.upper()} {positional[0]}"
     return ""
 
 
@@ -250,6 +299,6 @@ def _remove(code: Wikicode, node: Wikilink | Tag) -> None:
         code.remove(node)
 
 
-def _replace(code: Wikicode, node: Template, value: str) -> None:
+def _replace(code: Wikicode, node: Template | Tag, value: str) -> None:
     with suppress(ValueError):  # 이미 지운 노드 안에 있던 노드
         code.replace(node, value)
