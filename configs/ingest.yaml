@@ -1,0 +1,25 @@
+# 인제스트 설정 — 파싱 · 청킹 · 임베딩 · 저장
+
+source:
+  name: kowiki
+  dump_path: data/dump/kowiki-20261001-pages-articles.xml.bz2
+  dump_date: "20261001"
+  min_chars: 200          # 본문이 이보다 짧은 stub 문서 제외
+  parsed_dir: data/parsed
+
+chunking:
+  max_tokens: 384         # Phase 1 에서 256 / 384 / 512 비교 후 결정
+  overlap_ratio: 0.15     # 10~20% 범위
+  min_chars: 50           # 이보다 짧은 청크 제외
+
+embedding:
+  model: null             # Phase 1 에서 bge-m3 / KURE-v1 / KoE5 비교 후 결정
+  batch_size: 64
+  fp16: true
+  output_dir: data/emb
+
+store:
+  collection: "{source}_{model}"
+  qdrant:
+    quantization: int8
+    on_disk: true

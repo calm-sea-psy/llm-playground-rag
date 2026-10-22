@@ -1,0 +1,26 @@
+# 프로젝트 ruff 설정. 공유 설정(fastapi)을 extend 하고 numpy 규칙을 더한다.
+# target-version 은 pyproject.toml 의 requires-python 에서 읽는다.
+
+# "~" 는 ruff 가 홈 폴더로 풀어 준다.
+extend = "~/.claude/skills/python-conventions/ruff/fastapi.toml"
+
+[lint]
+extend-select = ["NPY"]
+
+[lint.isort]
+known-first-party = ["llm_playground_rag"]
+
+[lint.extend-per-file-ignores]
+# 디렉터리 패턴은 이 파일(프로젝트 루트) 기준.
+
+# 테스트 · 스크립트
+"tests/**/*.py"   = ["S101", "D", "ANN", "PLR2004", "S106", "S105", "TID251"]
+"scripts/**/*.py" = ["T20", "D", "PLC0415"]
+
+# 경계 모듈: pydantic(TID251) · Any(ANN401) 허용
+"**/api/**/*.py"         = ["TID251", "ANN401"]   # 라우터 · 요청/응답 모델
+"**/agent/state.py"      = ["TID251", "ANN401"]   # LangGraph 상태
+
+# 수치 계산: 논문 표기 변수명(N803/N806) · 계산식 안 숫자 리터럴(PLR2004) 허용
+"metrics.py"   = ["N803", "N806", "PLR2004"]
+"ann_bench.py" = ["N803", "N806", "PLR2004"]

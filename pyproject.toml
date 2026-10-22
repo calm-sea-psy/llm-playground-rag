@@ -1,0 +1,25 @@
+[project]
+name = "llm-playground-rag"
+version = "0.1.0"
+description = "한국어 위키백과 덤프 기반 RAG 파이프라인과 QA 챗봇"
+readme = "README.md"
+authors = [
+    { name = "yunpilsoo", email = "305675348+calm-sea-psy@users.noreply.github.com" }
+]
+requires-python = "==3.13.*"
+dependencies = [
+    "numpy>=2.5.4",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.32,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.17.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
