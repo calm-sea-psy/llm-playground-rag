@@ -11,7 +11,7 @@
 
 - [uv](https://docs.astral.sh/uv/) (Python 3.13은 `.python-version`으로 고정)
 - Docker (PostgreSQL + Qdrant)
-- 모듈 레포를 같은 부모 폴더에 나란히 clone (첫 태그 전까지 path 의존)
+- 모듈은 git 태그로 설치됩니다 (CORPUS `v0.1.0`, evalkit `evalkit-v0.1.0`). 모듈을 함께 고칠 때만 같은 부모 폴더에 나란히 clone 하고 `pyproject.toml` 의 source 를 path 로 바꿉니다
 
 ```
 작업 폴더/

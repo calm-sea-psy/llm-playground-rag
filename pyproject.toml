@@ -35,9 +35,9 @@ dev = [
 
 [tool.uv.sources]
 torch = { index = "pytorch-cu128" }
-# Phase 1 동안 모듈 레포를 같은 부모 폴더에 나란히 clone 해서 editable 로 쓴다. 첫 태그 후 git + 태그로 바꾼다
-playground-corpus = { path = "../llm-playground-corpus", editable = true }
-playground-evalkit = { path = "../llm-playground-llm/packages/evalkit", editable = true }
+# 모듈은 git 태그로 설치한다. 모듈을 함께 고칠 때는 나란히 clone 하고 잠깐 path(editable)로 바꾼다
+playground-corpus = { git = "https://github.com/calm-sea-psy/llm-playground-corpus", tag = "v0.1.0" }
+playground-evalkit = { git = "https://github.com/calm-sea-psy/llm-playground-llm", tag = "evalkit-v0.1.0", subdirectory = "packages/evalkit" }
 
 [[tool.uv.index]]
 name = "pytorch-cu128"
