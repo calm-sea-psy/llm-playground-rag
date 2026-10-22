@@ -9,7 +9,8 @@
 - 서브셋 수치는 1차 확인용. 전체 규모는 Phase 1.5 (reports/ann-benchmark.md)
 
 출력:
-  reports/{run_id}.md   결과 표 (커밋)
+  reports/{run_id}.md    결과 표 (커밋)
+  reports/{run_id}.svg   recall@10 – QPS 그래프 (커밋)
 
 사용법:
   uv run python scripts/bench_ann.py --collection kowiki-subset-10000_kure-v1
@@ -45,7 +46,7 @@ from playground_evalkit import (
 )
 from qdrant_client import models
 
-from playground_rag.eval import latency_summary, recall_at_k
+from playground_rag.eval import latency_summary, recall_at_k, recall_qps_svg
 from playground_rag.retrieval import FaissIndex
 from playground_rag.store import PgConfig, PgStore, QdrantStore
 
@@ -162,6 +163,11 @@ def _parse_args() -> argparse.Namespace:
         "--skip-qdrant-exact",
         action="store_true",
         help="Qdrant 전수 검색을 건너뛴다 (전체 규모에서 질의마다 원본 벡터를 디스크에서 다 읽는다)",
+    )
+    parser.add_argument(
+        "--machine",
+        default="RTX 5080 Laptop · 전원 모드 최고 성능(GPU 약 95W) · CPU 24스레드",
+        help="리포트에 적는 장비 · 전원 상태 (지연 · QPS 는 전원 모드에 따라 달라진다)",
     )
     parser.add_argument("--run-id", default="")
     return parser.parse_args()
@@ -345,13 +351,17 @@ def _write_report(
         f"- Qdrant: 로컬 Docker, HNSW m=16 · ef_construct=100 + int8 스칼라 양자화(RAM) · 원본 벡터 on_disk. "
         f"지연은 gRPC 왕복 포함 (REST 는 질의마다 약 16ms 더 든다), `qps` 는 요청 하나에 {QDRANT_BATCH}개씩 묶어 보냄. "
         "색인 시간 · 크기는 적재 때라 비움\n"
-        "- **서브셋 1차 확인용** — 전체 규모(약 230만 벡터)는 Phase 1.5\n\n"
+        f"- 전원 · 장비: {args.machine}\n\n"
+        f"![recall@10 – QPS]({run_id}.svg)\n\n"
+        "오른쪽 위로 갈수록 좋다 (같은 recall 에서 더 빠름). 각 점은 아래 표의 한 줄이다.\n\n"
         + render_table(rows, COLUMNS)
     )
     Path("reports").mkdir(exist_ok=True)
     # Windows 에서도 LF 로 (리포트는 커밋하고 .gitattributes 가 LF)
     (Path("reports") / f"{run_id}.md").write_text(report, encoding="utf-8", newline="\n")
-    print(f"report: reports/{run_id}.md")
+    chart = recall_qps_svg(rows, title=f"recall@10 – QPS ({vectors:,} 벡터)")
+    (Path("reports") / f"{run_id}.svg").write_text(chart, encoding="utf-8", newline="\n")
+    print(f"report: reports/{run_id}.md · {run_id}.svg")
 
 
 if __name__ == "__main__":
