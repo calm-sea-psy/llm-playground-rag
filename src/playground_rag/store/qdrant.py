@@ -63,8 +63,18 @@ class QdrantStore:
 
     @classmethod
     def from_env(cls) -> QdrantStore:
-        """QDRANT_URL(기본 http://localhost:6333)로 접속한다."""
-        return cls(QdrantClient(url=os.environ.get("QDRANT_URL", URL), check_compatibility=False))
+        """QDRANT_URL(기본 http://localhost:6333)로 접속한다. QDRANT_GRPC=0 이 아니면 gRPC(6334)를 쓴다.
+
+        REST 는 질의 하나에 약 16ms 가 더 든다 (서버 검색 약 1.5ms, Windows + Docker Desktop 에서 측정).
+        gRPC 는 약 1.8ms.
+        """
+        return cls(
+            QdrantClient(
+                url=os.environ.get("QDRANT_URL", URL),
+                prefer_grpc=os.environ.get("QDRANT_GRPC", "1") != "0",
+                check_compatibility=False,
+            )
+        )
 
     def ensure_collection(self, name: str, dim: int, *, on_disk: bool = True) -> None:
         """컬렉션이 없으면 만든다: 코사인 거리, int8 스칼라 양자화(RAM), 원본 벡터는 on_disk."""
@@ -135,8 +145,18 @@ class QdrantStore:
         *,
         doc_ids: Sequence[str] = (),
         categories: Sequence[str] = (),
+        params: models.SearchParams | None = None,
     ) -> list[VectorHit]:
-        """벡터와 가까운 청크 k건을 유사도 내림차순으로 돌려준다. doc_ids · categories 가 있으면 그 안에서만."""
+        """벡터와 가까운 청크 k건을 유사도 내림차순으로 돌려준다. doc_ids · categories 가 있으면 그 안에서만.
+
+        Args:
+          name: 컬렉션 이름.
+          vector: 질의 벡터 (d,).
+          k: 돌려받을 건수.
+          doc_ids: 이 문서들 안에서만.
+          categories: 이 분류 중 하나에 속한 문서에서만.
+          params: hnsw_ef · exact · 양자화 사용 여부. 없으면 컬렉션 기본값 (ANN 벤치가 바꿔 본다).
+        """
         conditions = []
         if doc_ids:
             conditions.append(
@@ -151,17 +171,35 @@ class QdrantStore:
             query=vector.tolist(),
             limit=k,
             query_filter=models.Filter(must=conditions) if conditions else None,
+            search_params=params,
             with_payload=["chunk_id", "doc_id"],
         )
-        return [
-            VectorHit(
-                chunk_id=point.payload["chunk_id"],
-                doc_id=point.payload["doc_id"],
-                score=point.score,
+        return [_vector_hit(point) for point in response.points]
+
+    def search_batch(
+        self,
+        name: str,
+        vectors: NDArray[np.float32],
+        k: int,
+        *,
+        params: models.SearchParams | None = None,
+    ) -> list[list[VectorHit]]:
+        """질의 벡터 (n, d) 마다 가까운 청크 k건. 요청 하나로 보낸다 (ANN 벤치의 처리량 측정용)."""
+        requests = [
+            models.QueryRequest(
+                query=vector.tolist(), limit=k, params=params, with_payload=["chunk_id", "doc_id"]
             )
-            for point in response.points
+            for vector in vectors
         ]
+        responses = self._client.query_batch_points(collection_name=name, requests=requests)
+        return [[_vector_hit(point) for point in response.points] for response in responses]
 
     def count(self, name: str) -> int:
         """컬렉션의 점 개수."""
         return self._client.count(collection_name=name, exact=True).count
+
+
+def _vector_hit(point: models.ScoredPoint) -> VectorHit:
+    return VectorHit(
+        chunk_id=point.payload["chunk_id"], doc_id=point.payload["doc_id"], score=point.score
+    )

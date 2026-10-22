@@ -50,6 +50,7 @@ RAG_COLLECTION=kowiki-subset-10000_kure-v1 uv run uvicorn playground_rag.api.app
 - `POST /search` — `{"query": "조선의 수도는?", "k": 5, "doc_ids": [], "categories": []}` → 청크 · 리랭커 점수(0~1)
 - `GET /health` — 검색 대상 컬렉션 · 색인 청크 수
 - Swagger: http://127.0.0.1:8000/docs
+- Qdrant 는 gRPC(6334)로 접속합니다. REST 로 바꾸려면 `QDRANT_GRPC=0`
 
 ## 구조
 
@@ -60,7 +61,8 @@ src/playground_rag/
   sources/               WikiSource (덤프 스트리밍 파싱)
   ingest/                WikiCleaner (위키 마크업 정제)
   store/                 PostgreSQL (문서 · 청크 원문) · Qdrant (벡터)
-  retrieval/             BM25 · Dense · Hybrid(RRF) · Reranker, 검색 서비스
+  retrieval/             BM25 · Dense · Hybrid(RRF) · Reranker · FAISS 색인, 검색 서비스
+  eval/                  ANN 벤치 지표
   api/                   FastAPI — /search · /health
 scripts/                 덤프 다운로드, 인제스트 · 평가 스크립트
 tests/
