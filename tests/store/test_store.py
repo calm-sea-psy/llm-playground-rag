@@ -1,0 +1,127 @@
+"""저장소 테스트. PG · Qdrant 가 떠 있지 않으면(docker compose up) 연동 테스트는 건너뛴다."""
+
+import uuid
+from collections.abc import Iterator
+
+import numpy as np
+import psycopg
+import pytest
+from playground_corpus import Chunk, Document, Section
+from qdrant_client import QdrantClient
+from qdrant_client.http.exceptions import ResponseHandlingException
+
+from playground_rag.store import PgConfig, PgStore, QdrantStore, chunk_payload, point_id
+
+DOCS = [
+    Document(
+        id="1",
+        title="서울",
+        text="수도",
+        sections=(Section(0, "", "수도"),),
+        categories=("도시",),
+        meta={"url": "u1", "dump_date": "20261001"},
+    ),
+    Document(id="2", title="파리", text="수도", sections=(Section(0, "", "수도"),)),
+]
+CHUNKS = [
+    Chunk(id="1-0", doc_id="1", title="서울", section="", text="서울\n수도", seq=0, token_count=3),
+    Chunk(
+        id="2-0",
+        doc_id="2",
+        title="파리",
+        section="역사",
+        text="파리 > 역사\n수도",
+        seq=0,
+        token_count=5,
+    ),
+]
+
+
+def test_point_id_is_stable_uuid():
+    assert point_id("1-0") == point_id("1-0")
+    assert point_id("1-0") != point_id("1-1")
+    uuid.UUID(point_id("1-0"))
+
+
+def test_chunk_payload_has_filters_but_no_text():
+    payload = chunk_payload(CHUNKS[1], ["도시"], "20261001")
+
+    assert payload == {
+        "chunk_id": "2-0",
+        "doc_id": "2",
+        "title": "파리",
+        "section": "역사",
+        "seq": 0,
+        "categories": ["도시"],
+        "dump_date": "20261001",
+    }
+
+
+@pytest.fixture
+def pg() -> Iterator[PgStore]:
+    """테스트마다 새 스키마를 만들어 쓰고 지운다."""
+    schema = f"test_{uuid.uuid4().hex[:8]}"
+    try:
+        conn = psycopg.connect(PgConfig.from_env().conninfo, connect_timeout=2)
+    except psycopg.OperationalError:
+        pytest.skip("PostgreSQL 이 떠 있지 않음 (docker compose up)")
+    conn.execute(f"CREATE SCHEMA {schema}")
+    conn.execute(f"SET search_path TO {schema}")
+    conn.commit()
+    store = PgStore(conn)
+    try:
+        yield store
+    finally:
+        conn.rollback()
+        conn.execute(f"DROP SCHEMA {schema} CASCADE")
+        conn.commit()
+        store.close()
+
+
+def test_pg_upserts_and_reads_chunks_in_requested_order(pg: PgStore):
+    pg.create_schema()
+    pg.upsert_documents("kowiki", DOCS)
+    pg.upsert_documents("kowiki", DOCS)  # 다시 넣어도 덮어쓴다
+    pg.upsert_chunks("kowiki_test", CHUNKS)
+
+    assert pg.count("documents") == 2
+    assert pg.get_chunks("kowiki_test", "kowiki", ["2-0", "없음", "1-0"]) == [CHUNKS[1], CHUNKS[0]]
+
+
+def test_pg_records_ingest_runs(pg: PgStore):
+    pg.create_schema()
+    run_id = pg.start_run("kowiki", "kowiki_test", "bge-m3", 384)
+    pg.finish_run(run_id, doc_count=2, chunk_count=2)
+
+    assert pg.count("ingest_runs") == 1
+
+
+@pytest.fixture
+def qdrant() -> Iterator[tuple[QdrantStore, str]]:
+    client = QdrantClient(url="http://localhost:6333", timeout=2, check_compatibility=False)
+    try:
+        client.get_collections()
+    except ResponseHandlingException:  # 접속 실패를 qdrant-client 가 감싸서 던진다
+        pytest.skip("Qdrant 가 떠 있지 않음 (docker compose up)")
+    name = f"test_{uuid.uuid4().hex[:8]}"
+    store = QdrantStore(client)
+    try:
+        yield store, name
+    finally:
+        store.delete_collection(name)
+
+
+def test_qdrant_upserts_and_searches_with_filters(qdrant: tuple[QdrantStore, str]):
+    store, name = qdrant
+    vectors = np.array([[1, 0, 0, 0], [0, 1, 0, 0]], dtype=np.float32)
+    store.ensure_collection(name, dim=4)
+    store.ensure_collection(name, dim=4)  # 이미 있으면 그대로
+
+    store.upsert(name, CHUNKS, vectors, {"1": ["도시"]}, dump_date="20261001")
+    store.upsert(name, CHUNKS, vectors, {"1": ["도시"]})  # 같은 청크는 덮어쓴다
+
+    assert store.count(name) == 2
+    query = np.array([0.9, 0.1, 0, 0], dtype=np.float32)
+    assert [hit.chunk_id for hit in store.search(name, query, k=2)] == ["1-0", "2-0"]
+    assert [hit.chunk_id for hit in store.search(name, query, k=2, doc_ids=["2"])] == ["2-0"]
+    assert [hit.chunk_id for hit in store.search(name, query, k=2, categories=["도시"])] == ["1-0"]

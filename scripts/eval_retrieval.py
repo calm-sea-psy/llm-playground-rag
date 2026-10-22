@@ -165,7 +165,8 @@ def _write_report(
         "- 지연은 질의 하나의 검색 시간 (색인은 미리 만든 상태)\n\n" + render_table(rows, columns)
     )
     Path("reports").mkdir(exist_ok=True)
-    (Path("reports") / f"{run_id}.md").write_text(report, encoding="utf-8")
+    # Windows 에서도 LF 로 (리포트는 커밋하고 .gitattributes 가 LF)
+    (Path("reports") / f"{run_id}.md").write_text(report, encoding="utf-8", newline="\n")
     print(f"report: reports/{run_id}.md")
 
 
