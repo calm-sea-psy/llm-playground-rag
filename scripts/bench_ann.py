@@ -5,7 +5,7 @@
 
 - 문서 벡터는 scripts/ingest.py 가 남긴 임베딩 캐시를, 청크 원문은 PG 를 읽는다 (같은 컬렉션)
 - 질문은 정답 문서가 컬렉션에 있는 KorQuAD dev 질문 중 무작위 --queries 개. 질의 벡터는 캐시에 남긴다
-- FAISS 지연은 스레드 1개, 처리량은 전체 스레드. Qdrant 지연은 REST 왕복 포함
+- FAISS 지연은 스레드 1개, 처리량은 전체 스레드. Qdrant 지연은 gRPC 왕복 포함
 - 서브셋 수치는 1차 확인용. 전체 규모는 Phase 1.5 (reports/ann-benchmark.md)
 
 출력:
@@ -13,10 +13,12 @@
 
 사용법:
   uv run python scripts/bench_ann.py --collection kowiki-subset-10000_kure-v1
+  uv run python scripts/bench_ann.py --collection kowiki_kure-v1 --skip-qdrant-exact --run-id ann-benchmark
 """
 
 import argparse
 import json
+import math
 import random
 import time
 from collections.abc import Callable, Sequence
@@ -29,6 +31,7 @@ import numpy as np
 from numpy.typing import NDArray
 from playground_corpus import (
     EMBEDDING_MODELS,
+    Chunk,
     EmbeddingCache,
     SentenceTransformerEmbedder,
 )
@@ -52,15 +55,8 @@ EMB_DIR = Path("data/emb")
 TOP_K = 10
 WARMUP = 20  # 측정 전에 버리는 질의 수 (캐시 · 스레드 풀 준비)
 QDRANT_BATCH = 100  # 처리량 측정 때 요청 하나에 담는 질의 수
-NLIST = 1024  # IVF 목록 수 ≈ 4·√n (n = 5만). 전체 규모에서는 다시 정한다
-# (index_factory 문자열, 바꿔 볼 검색 인자, 값들)
-FAISS_SPECS: tuple[tuple[str, str, tuple[int, ...]], ...] = (
-    ("Flat", "", (0,)),
-    ("HNSW32", "efSearch", (16, 32, 64, 128, 256)),
-    (f"IVF{NLIST},Flat", "nprobe", (1, 4, 16, 64)),
-    (f"IVF{NLIST},SQ8", "nprobe", (4, 16, 64)),
-    (f"IVF{NLIST},PQ128", "nprobe", (4, 16, 64)),  # 벡터당 128바이트 (float32 의 1/32)
-)
+HNSW_EF = (16, 32, 64, 128, 256)
+NPROBE = (1, 4, 16, 64)
 QDRANT_EF = (16, 32, 64, 128, 256)
 COLUMNS = [
     "engine",
@@ -95,29 +91,29 @@ def main() -> None:
     chunk_ids, vectors = EmbeddingCache(
         EMB_DIR / args.model / f"{args.collection}-{args.max_tokens}"
     ).load()
-    with PgStore.connect(PgConfig.from_env()) as pg:
-        chunks = {chunk.id: chunk for chunk in pg.all_chunks(args.collection, SOURCE)}
-    missing = [chunk_id for chunk_id in chunk_ids if chunk_id not in chunks]
-    if missing:
-        raise SystemExit(
-            f"PG 에 없는 청크 {len(missing)}개 (예: {missing[0]}) — 같은 컬렉션인지 확인"
-        )
-    doc_ids = [chunks[chunk_id].doc_id for chunk_id in chunk_ids]
-    items = _sample_questions(args, {chunk.title for chunk in chunks.values()})
+    doc_ids = [chunk_id.rsplit("-", 1)[0] for chunk_id in chunk_ids]  # 청크 id = {문서 id}-{순서}
+    pg = PgStore.connect(PgConfig.from_env())
+    chunks = _ChunkCache(pg, args.collection)
+    items = _sample_questions(args, pg.collection_titles(args.collection, SOURCE))
     queries = _query_vectors(args, items)
+    qdrant = QdrantStore.from_env()
+    status = qdrant.index_status(args.collection)
+    if status.indexed < status.points:  # HNSW 를 만드는 중이면 전수 검색이 섞여 지연이 틀린다
+        raise SystemExit(f"Qdrant 색인 중: {status} — 끝난 뒤 다시 실행")
     print(
         f"vectors={len(chunk_ids):,} queries={len(items):,} threads={faiss.omp_get_max_threads()}"
     )
 
     def judge(found: list[list[str]]) -> list[list[bool]]:
+        by_id = chunks.get([c for ids in found for c in ids])
         return [
-            [contains_answer(chunks[c].title, chunks[c].text, item) for c in ids]
+            [contains_answer(by_id[c].title, by_id[c].text, item) for c in ids]
             for item, ids in zip(items, found, strict=True)
         ]
 
     rows: list[dict[str, float | str | int]] = []
     truth: list[list[str]] = []
-    for factory, param, values in FAISS_SPECS:
+    for factory, param, values in _faiss_specs(args.nlist or _nlist(len(chunk_ids))):
         start = time.perf_counter()
         index = FaissIndex.build(
             vectors, chunk_ids, doc_ids, collection=args.collection, factory=factory
@@ -135,8 +131,7 @@ def main() -> None:
             rows.append({**row, "build_sec": round(build_sec, 1), "index_mb": round(index_mb, 1)})
             _print(row)
 
-    qdrant = QdrantStore.from_env()
-    for label, param, params in _qdrant_specs():
+    for label, param, params in _qdrant_specs(exact=not args.skip_qdrant_exact):
         run = _qdrant_run(qdrant, args.collection, queries, params)
         row = _row("qdrant", label, param, run, truth=truth, judge=judge)
         rows.append({**row, "build_sec": "-", "index_mb": "-"})
@@ -160,6 +155,14 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--queries", type=int, default=1000)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--nlist", type=int, default=0, help="IVF 목록 수. 0 이면 4·√n 에 가까운 2의 거듭제곱"
+    )
+    parser.add_argument(
+        "--skip-qdrant-exact",
+        action="store_true",
+        help="Qdrant 전수 검색을 건너뛴다 (전체 규모에서 질의마다 원본 벡터를 디스크에서 다 읽는다)",
+    )
     parser.add_argument("--run-id", default="")
     return parser.parse_args()
 
@@ -205,7 +208,43 @@ def _faiss_run(index: FaissIndex, queries: NDArray[np.float32]) -> RunResult:
     return RunResult(found=found, latencies=latencies, qps=qps)
 
 
-def _qdrant_specs() -> list[tuple[str, str, models.SearchParams]]:
+def _nlist(n: int) -> int:
+    """4·√n 에 가장 가까운 2의 거듭제곱 (FAISS 권장 범위 4~16·√n 의 아래쪽 — 학습 시간을 줄인다)."""
+    target = 4 * math.sqrt(n)
+    return 2 ** round(math.log2(target))
+
+
+def _faiss_specs(nlist: int) -> list[tuple[str, str, tuple[int, ...]]]:
+    """(index_factory 문자열, 바꿔 볼 검색 인자, 값들)."""
+    return [
+        ("Flat", "", (0,)),
+        ("HNSW32", "efSearch", HNSW_EF),
+        (f"IVF{nlist},Flat", "nprobe", NPROBE),
+        (f"IVF{nlist},SQ8", "nprobe", NPROBE[1:]),
+        (f"IVF{nlist},PQ128", "nprobe", NPROBE[1:]),  # 벡터당 128바이트 (float32 의 1/32)
+    ]
+
+
+class _ChunkCache:
+    """판정에 필요한 청크만 PG 에서 꺼내 두는 캐시 (전체 규모에서 청크 전부를 올리지 않는다)."""
+
+    def __init__(self, pg: PgStore, collection: str) -> None:
+        self._pg = pg
+        self._collection = collection
+        self._by_id: dict[str, Chunk] = {}
+
+    def get(self, chunk_ids: Sequence[str]) -> dict[str, Chunk]:
+        missing = list(dict.fromkeys(c for c in chunk_ids if c not in self._by_id))
+        for chunk in self._pg.get_chunks(self._collection, SOURCE, missing):
+            self._by_id[chunk.id] = chunk
+        if lost := [c for c in missing if c not in self._by_id]:
+            raise SystemExit(
+                f"PG 에 없는 청크 {len(lost)}개 (예: {lost[0]}) — 같은 컬렉션인지 확인"
+            )
+        return self._by_id
+
+
+def _qdrant_specs(*, exact: bool) -> list[tuple[str, str, models.SearchParams]]:
     """(색인 이름, 인자 표기, 검색 인자). 컬렉션은 HNSW(m=16) + int8 스칼라 양자화, 원본 벡터 on_disk."""
     original = models.QuantizationSearchParams(ignore=True)
     variants = (
@@ -217,7 +256,11 @@ def _qdrant_specs() -> list[tuple[str, str, models.SearchParams]]:
             models.QuantizationSearchParams(ignore=False, rescore=True, oversampling=2.0),
         ),
     )
-    specs = [("exact float", "-", models.SearchParams(exact=True, quantization=original))]
+    specs = (
+        [("exact float", "-", models.SearchParams(exact=True, quantization=original))]
+        if exact
+        else []
+    )
     for label, quantization in variants:
         specs.extend(
             (label, f"hnsw_ef={ef}", models.SearchParams(hnsw_ef=ef, quantization=quantization))

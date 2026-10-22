@@ -20,6 +20,17 @@ _POINT_NAMESPACE = uuid.UUID(
 
 
 @dataclass(frozen=True)
+class IndexStatus:
+    """컬렉션 색인 상태."""
+
+    status: str
+    """green(완료) · yellow(최적화 중) · grey · red."""
+    points: int
+    indexed: int
+    """HNSW 색인에 들어간 벡터 수. points 보다 적으면 나머지는 전수 비교로 찾는다."""
+
+
+@dataclass(frozen=True)
 class VectorHit:
     """벡터 검색 결과 한 건."""
 
@@ -197,6 +208,15 @@ class QdrantStore:
     def count(self, name: str) -> int:
         """컬렉션의 점 개수."""
         return self._client.count(collection_name=name, exact=True).count
+
+    def index_status(self, name: str) -> IndexStatus:
+        """컬렉션 상태와 HNSW 색인에 들어간 벡터 수. 적재 직후에는 색인을 뒤에서 만든다."""
+        info = self._client.get_collection(name)
+        return IndexStatus(
+            status=str(info.status.value),
+            points=info.points_count or 0,
+            indexed=info.indexed_vectors_count or 0,
+        )
 
 
 def _vector_hit(point: models.ScoredPoint) -> VectorHit:
