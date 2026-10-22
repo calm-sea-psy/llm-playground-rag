@@ -15,6 +15,7 @@
 
 import argparse
 import json
+import statistics
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -39,19 +40,30 @@ from playground_evalkit import (
 )
 
 from playground_rag.core import Retriever
-from playground_rag.retrieval import Bm25Retriever, DenseRetriever, HybridRetriever, KiwiAnalyzer
+from playground_rag.retrieval import (
+    Bm25Retriever,
+    CrossEncoderScorer,
+    DenseRetriever,
+    HybridRetriever,
+    KiwiAnalyzer,
+    Reranker,
+)
 from playground_rag.store import PgConfig, PgStore, QdrantStore
 
 SUBSET = Path("data/parsed/kowiki-subset-10000")
 TOKENIZER = "BAAI/bge-m3"  # 후보 임베딩 3종이 같은 XLM-R 토크나이저라 청크 경계가 같다
 TOP_K = 10
 SOURCE = "kowiki"
-RETRIEVERS = ("bm25", "dense", "hybrid")  # hybrid = dense + bm25 RRF
+RERANK_SUFFIX = "-rerank"
+# hybrid = dense + bm25 RRF, *-rerank = 그 검색기의 후보 20개를 bge-reranker-v2-m3 로 다시 매김
+RETRIEVERS = ("bm25", "dense", "hybrid", "bm25-rerank", "dense-rerank", "hybrid-rerank")
 
 
 def main() -> None:
     args = _parse_args()
-    needs_dense = bool({"dense", "hybrid"} & set(args.retriever))
+    needs_dense = any(
+        name.removesuffix(RERANK_SUFFIX) in {"dense", "hybrid"} for name in args.retriever
+    )
     if needs_dense and (not args.collection or len(args.max_tokens) != 1):
         raise SystemExit(
             "dense · hybrid 는 --model · --collection 과 그 컬렉션의 --max-tokens 하나가 필요하다"
@@ -73,6 +85,11 @@ def main() -> None:
     print(f"documents={len(documents)} questions={len(items)} run_id={run_id}")
 
     dense = _dense(args) if needs_dense else None
+    scorer = (
+        CrossEncoderScorer.load()
+        if any(n.endswith(RERANK_SUFFIX) for n in args.retriever)
+        else None
+    )
     rows = []
     for max_tokens in args.max_tokens:
         chunker = Chunker(tokenizer, ChunkingConfig(max_tokens=max_tokens))
@@ -81,10 +98,9 @@ def main() -> None:
         bm25 = Bm25Retriever(chunks, KiwiAnalyzer())
         bm25_build_sec = time.perf_counter() - start
         for name in args.retriever:
-            retriever = _retriever(name, bm25, dense)
-            build_sec = (
-                0.0 if name == "dense" else bm25_build_sec
-            )  # dense 색인은 ingest 에서 만든다
+            retriever = _retriever(name, bm25, dense, scorer)
+            # dense 색인은 ingest 에서 만든다
+            build_sec = 0.0 if name.startswith("dense") else bm25_build_sec
             row, records = _evaluate(run_id, name, max_tokens, retriever, items)
             write_records(
                 Path("data/runs") / run_id / f"records-{name}-{max_tokens}.jsonl", records
@@ -125,12 +141,21 @@ def _dense(args: argparse.Namespace) -> DenseRetriever:
     )
 
 
-def _retriever(name: str, bm25: Bm25Retriever, dense: DenseRetriever | None) -> Retriever:
-    if name == "bm25":
-        return bm25
-    if dense is None:
+def _retriever(
+    name: str, bm25: Bm25Retriever, dense: DenseRetriever | None, scorer: CrossEncoderScorer | None
+) -> Retriever:
+    base_name = name.removesuffix(RERANK_SUFFIX)
+    if base_name == "bm25":
+        base: Retriever = bm25
+    elif dense is None:
         raise SystemExit(f"{name} 는 --collection 이 필요하다")
-    return dense if name == "dense" else HybridRetriever([dense, bm25])
+    else:
+        base = dense if base_name == "dense" else HybridRetriever([dense, bm25])
+    if name.endswith(RERANK_SUFFIX):
+        if scorer is None:
+            raise SystemExit(f"{name} 는 리랭커가 필요하다")
+        return Reranker(base, scorer)
+    return base
 
 
 def _evaluate(
@@ -139,12 +164,14 @@ def _evaluate(
     relevance: list[list[bool]] = []
     doc_relevance: list[list[bool]] = []
     latencies: list[float] = []
+    top_scores: list[float] = []
     for item in items:
         start = time.perf_counter()
         hits = retriever.search(item.question, k=TOP_K)
         latencies.append((time.perf_counter() - start) * 1000)
         relevance.append([contains_answer(hit.chunk.title, hit.chunk.text, item) for hit in hits])
         doc_relevance.append([hit.chunk.title == item.title for hit in hits])
+        top_scores.append(hits[0].score if hits else 0.0)
     created_at = datetime.now(tz=UTC).isoformat(timespec="seconds")
     records = [
         ResultRecord(
@@ -156,12 +183,16 @@ def _evaluate(
                 "hit@5": float(any(rel[:5])),
                 "hit@10": float(any(rel[:10])),
                 "doc_hit@5": float(any(doc[:5])),
+                "top1_score": top,
             },
             spec={"retriever": name, "max_tokens": max_tokens, "tokenizer": TOKENIZER},
             created_at=created_at,
         )
-        for item, rel, doc in zip(items, relevance, doc_relevance, strict=True)
+        for item, rel, doc, top in zip(items, relevance, doc_relevance, top_scores, strict=True)
     ]
+    # 1위 점수 분포: 1위가 정답일 때와 아닐 때 — 리랭커 점수로 답변 정책 기준값을 정할 수 있는지 보는 용도
+    hit_scores = [top for top, rel in zip(top_scores, relevance, strict=True) if any(rel[:1])]
+    miss_scores = [top for top, rel in zip(top_scores, relevance, strict=True) if not any(rel[:1])]
     latencies.sort()
     row = {
         "retriever": name,
@@ -173,6 +204,8 @@ def _evaluate(
         "doc_hit_at_5": hit_at_k(doc_relevance, 5),
         "p50_ms": round(latencies[len(latencies) // 2], 1),
         "p99_ms": round(latencies[int(len(latencies) * 0.99)], 1),
+        "top1_hit_median": statistics.median(hit_scores) if hit_scores else 0.0,
+        "top1_miss_median": statistics.median(miss_scores) if miss_scores else 0.0,
     }
     return row, records
 
@@ -196,6 +229,8 @@ def _write_report(
         "p50_ms",
         "p99_ms",
         "build_sec",
+        "top1_hit_median",
+        "top1_miss_median",
     ]
     report = (
         f"# 검색 평가 — {run_id}\n\n"
@@ -203,7 +238,9 @@ def _write_report(
         f"- 청킹: `{TOKENIZER}` 토크나이저 기준 (후보 임베딩 3종과 같은 청크 경계)\n"
         "- 정답 판정: evalkit `contains_answer` (제목 일치 + 공백 무시 정답 포함) — CORPUS 임베딩 벤치와 같은 규칙\n"
         "- **서브셋 수치는 상대 비교 전용** — 방해 문서가 적어 전체 코퍼스보다 높게 나온다\n"
-        "- 지연은 질의 하나의 검색 시간 (색인은 미리 만든 상태)\n\n" + render_table(rows, columns)
+        "- 지연은 질의 하나의 검색 시간 (색인은 미리 만든 상태)\n"
+        "- `top1_hit_median` · `top1_miss_median`: 1위가 정답일 때 · 아닐 때의 1위 점수 중앙값 "
+        "(검색기마다 척도가 다르다 — 리랭커는 0~1)\n\n" + render_table(rows, columns)
     )
     Path("reports").mkdir(exist_ok=True)
     # Windows 에서도 LF 로 (리포트는 커밋하고 .gitattributes 가 LF)

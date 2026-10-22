@@ -2,7 +2,7 @@
 
 from collections.abc import Sequence
 
-from kiwipiepy import Kiwi
+from kiwipiepy import Kiwi, Token
 
 # 검색어로 쓸 품사. 조사(J*) · 어미(E*) · 의존 명사(NNB) · 부호(S*) 는 뺀다
 #   NNG 일반 명사 · NNP 고유 명사 · NR 수사 · NP 대명사 · XR 어근 · VV 동사 어간 · VA 형용사 어간
@@ -30,5 +30,5 @@ class KiwiAnalyzer:
         return [_keep(tokens) for tokens in self._kiwi.tokenize(list(texts))]
 
 
-def _keep(tokens: Sequence[object]) -> list[str]:
+def _keep(tokens: Sequence[Token]) -> list[str]:
     return [token.form.lower() for token in tokens if token.tag in KEEP_TAGS]
