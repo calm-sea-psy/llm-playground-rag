@@ -73,14 +73,28 @@ DATE_TEMPLATES = frozenset(
     }
 )
 
+# 함선 이름 틀. {{USS|폼프렛|SS-391}} → USS 폼프렛 (접두 + 첫 위치 인자)
+SHIP_PREFIX_TEMPLATES = frozenset({"uss", "hms", "hmas", "hmcs", "sms", "rms", "ins", "jds"})
+
 DISAMBIGUATION_MARKERS = ("동음이의", "disambig")
 
 _INTERLANGUAGE = re.compile(r"^[a-z]{2,3}(?:-[a-z]+)*:")
 _LEFTOVER_TEMPLATE = re.compile(r"\{\{[^{}]*\}\}")
+_LEFTOVER_LINK = re.compile(
+    r"\[\[(?:[^\[\]|]*\|)?([^\[\]]*)\]\]"
+)  # 파서가 놓친 [[대상|표시]] → 표시
+_HTML_TAG = re.compile(r"</?[a-zA-Z][a-zA-Z0-9]*(?:\s[^<>]*)?/?>")  # 닫히지 않아 파서가 놓친 태그
+_BROKEN_REF = re.compile(r"<ref\b[^>\n]*$", re.MULTILINE)  # 따옴표가 안 닫혀 줄 끝까지 이어진 각주
+_TABLE_LINE = re.compile(r"^[ \t]*(?:\{\||\|\}|\|-|\||!).*$", re.MULTILINE)  # 파서가 놓친 표 줄
+_LIST_MARKER = re.compile(
+    r"^[ \t]*[*#:;]+[ \t]*", re.MULTILINE
+)  # 앞의 수식을 지우면 공백 뒤에 남는다
+_MAGIC_WORD = re.compile(r"__[A-Z]+__")  # __NOTOC__ · __TOC__ 등
 _FOOTNOTE_MARK = re.compile(r"\[(?:\d+|주 \d+|각주 \d+)\]")
 _LEFTOVER_BRACKETS = re.compile(r"\[\[|\]\]|\{\{|\}\}|\{\||\|\}")
+_SPACE_BEFORE_PUNCT = re.compile(r"[ \t]+([.,])")  # 지운 각주 · 틀 자리에 남은 공백
 _EMPTY_PARENS = re.compile(r"[(（]\s*[,;、]?\s*[)）]")
-_SPACES = re.compile(r"[ 	00a0200b]+")
+_SPACES = re.compile(r"[ \t\u00a0\u200b]+")  # 공백 · 탭 · NBSP · zero-width space
 _SPACE_AROUND_NEWLINE = re.compile(r" *\n *")
 _MANY_NEWLINES = re.compile(r"\n{3,}")
 
@@ -153,10 +167,17 @@ def clean_text(text: str) -> str:
     while previous != text:  # 안쪽부터 한 겹씩 남은 틀을 걷는다
         previous = text
         text = _LEFTOVER_TEMPLATE.sub("", text)
+    text = _LEFTOVER_LINK.sub(r"\1", text)
+    text = _BROKEN_REF.sub("", text)
+    text = _HTML_TAG.sub("", text)
+    text = _TABLE_LINE.sub("", text)
+    text = _LIST_MARKER.sub("", text)
+    text = _MAGIC_WORD.sub("", text)
     text = _FOOTNOTE_MARK.sub("", text)
     text = _LEFTOVER_BRACKETS.sub("", text)
     text = _EMPTY_PARENS.sub("", text)
     text = _SPACES.sub(" ", text)
+    text = _SPACE_BEFORE_PUNCT.sub(r"\1", text)
     text = _SPACE_AROUND_NEWLINE.sub("\n", text)
     text = _MANY_NEWLINES.sub("\n\n", text)
     return text.strip()
@@ -204,6 +225,8 @@ def _template_text(name: str, template: Template) -> str:
         return _format_date(positional[:3])
     if name in KEEP_LAST_PARAM_TEMPLATES or name.startswith(("lang-", "llang")):
         return positional[-1] if positional else ""
+    if name in SHIP_PREFIX_TEMPLATES:
+        return f"{name.upper()} {positional[0]}" if positional else ""
     return ""
 
 
