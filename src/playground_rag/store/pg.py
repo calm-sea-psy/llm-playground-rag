@@ -160,6 +160,27 @@ class PgStore:
             by_id = {row[0]: Chunk(*row) for row in cur.fetchall()}
         return [by_id[chunk_id] for chunk_id in chunk_ids if chunk_id in by_id]
 
+    def all_chunks(self, collection: str, source: str) -> list[Chunk]:
+        """컬렉션의 청크 전부를 (문서 id, 순서) 순으로 돌려준다. 메모리 색인(BM25)을 만들 때 쓴다."""
+        with self._conn.cursor() as cur:
+            cur.execute(
+                "SELECT c.id, c.doc_id, d.title, c.section, c.text, c.seq, c.token_count "
+                "FROM chunks c JOIN documents d ON d.source = %s AND d.id = c.doc_id "
+                "WHERE c.collection = %s ORDER BY c.doc_id, c.seq",
+                (source, collection),
+            )
+            return [Chunk(*row) for row in cur.fetchall()]
+
+    def doc_categories(self, collection: str, source: str) -> dict[str, frozenset[str]]:
+        """컬렉션에 청크가 있는 문서마다 분류 집합. BM25 의 분류 필터에 쓴다."""
+        with self._conn.cursor() as cur:
+            cur.execute(
+                "SELECT d.id, d.categories FROM documents d WHERE d.source = %s AND EXISTS "
+                "(SELECT 1 FROM chunks c WHERE c.collection = %s AND c.doc_id = d.id)",
+                (source, collection),
+            )
+            return {doc_id: frozenset(categories) for doc_id, categories in cur.fetchall()}
+
     def start_run(self, source: str, collection: str, model: str, max_tokens: int) -> int:
         """인제스트 실행을 기록하고 실행 id 를 돌려준다."""
         with self._conn.cursor() as cur:

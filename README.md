@@ -38,6 +38,19 @@ uv run pytest
 uv run ruff check
 ```
 
+## 검색 API
+
+인제스트한 컬렉션을 Hybrid(Dense + BM25) → 리랭커 순서로 검색합니다. 시작할 때 임베딩 · 리랭커 모델을 올리고 PG 청크로 BM25 색인을 만듭니다.
+
+```bash
+# 컬렉션 기본값은 configs/ingest.yaml 의 store.collection ({source}_{model}). 서브셋은 직접 지정
+RAG_COLLECTION=kowiki-subset-10000_kure-v1 uv run uvicorn playground_rag.api.app:create_app --factory --host 127.0.0.1 --port 8000
+```
+
+- `POST /search` — `{"query": "조선의 수도는?", "k": 5, "doc_ids": [], "categories": []}` → 청크 · 리랭커 점수(0~1)
+- `GET /health` — 검색 대상 컬렉션 · 색인 청크 수
+- Swagger: http://127.0.0.1:8000/docs
+
 ## 구조
 
 ```
@@ -46,6 +59,9 @@ src/playground_rag/
   core/                  Hit · Filters 자료형, Source · Retriever 계약
   sources/               WikiSource (덤프 스트리밍 파싱)
   ingest/                WikiCleaner (위키 마크업 정제)
+  store/                 PostgreSQL (문서 · 청크 원문) · Qdrant (벡터)
+  retrieval/             BM25 · Dense · Hybrid(RRF) · Reranker, 검색 서비스
+  api/                   FastAPI — /search · /health
 scripts/                 덤프 다운로드, 인제스트 · 평가 스크립트
 tests/
 data/                    덤프 · 파싱 결과 · 임베딩 (git 제외)

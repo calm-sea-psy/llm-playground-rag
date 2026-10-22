@@ -88,6 +88,21 @@ def test_pg_upserts_and_reads_chunks_in_requested_order(pg: PgStore):
     assert pg.get_chunks("kowiki_test", "kowiki", ["2-0", "없음", "1-0"]) == [CHUNKS[1], CHUNKS[0]]
 
 
+def test_pg_reads_all_chunks_and_categories_of_collection(pg: PgStore):
+    pg.create_schema()
+    pg.upsert_documents("kowiki", DOCS)
+    pg.upsert_chunks("kowiki_test", CHUNKS)
+    pg.upsert_chunks("other", CHUNKS[:1])
+
+    assert pg.all_chunks("kowiki_test", "kowiki") == CHUNKS
+    assert pg.all_chunks("other", "kowiki") == CHUNKS[:1]
+    assert pg.doc_categories("kowiki_test", "kowiki") == {
+        "1": frozenset({"도시"}),
+        "2": frozenset(),
+    }
+    assert pg.doc_categories("other", "kowiki") == {"1": frozenset({"도시"})}
+
+
 def test_pg_records_ingest_runs(pg: PgStore):
     pg.create_schema()
     run_id = pg.start_run("kowiki", "kowiki_test", "bge-m3", 384)
