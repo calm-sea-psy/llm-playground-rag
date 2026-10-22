@@ -95,7 +95,7 @@ def main() -> None:
         chunker = Chunker(tokenizer, ChunkingConfig(max_tokens=max_tokens))
         chunks = [chunk for doc in documents for chunk in chunker.chunk(doc)]
         start = time.perf_counter()
-        bm25 = Bm25Retriever(chunks, KiwiAnalyzer())
+        bm25 = Bm25Retriever.from_chunks(chunks, KiwiAnalyzer())
         bm25_build_sec = time.perf_counter() - start
         for name in args.retriever:
             retriever = _retriever(name, bm25, dense, scorer)

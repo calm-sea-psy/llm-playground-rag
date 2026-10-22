@@ -5,8 +5,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Protocol
 
 from playground_corpus import EMBEDDING_MODELS, Chunk, SentenceTransformerEmbedder
@@ -14,7 +15,7 @@ from playground_corpus import EMBEDDING_MODELS, Chunk, SentenceTransformerEmbedd
 from playground_rag.core import Filters, Hit, Retriever
 from playground_rag.retrieval import cross_encoder, hybrid, rerank
 from playground_rag.retrieval.analyzer import KiwiAnalyzer
-from playground_rag.retrieval.bm25 import Bm25Retriever
+from playground_rag.retrieval.bm25 import Bm25Index, Bm25Retriever
 from playground_rag.retrieval.cross_encoder import CrossEncoderScorer
 from playground_rag.retrieval.dense import ChunkStore, DenseRetriever, VectorIndex
 from playground_rag.retrieval.hybrid import HybridRetriever
@@ -28,8 +29,8 @@ TOP_K = 5  # configs/retrieval.yaml reranker.top_k — 답변 생성에 넘길 �
 class ChunkCatalog(ChunkStore, Protocol):
     """청크 원문 저장소 (PgStore). Dense 가 쓰는 조회에 BM25 색인용 전체 읽기를 더한 것."""
 
-    def all_chunks(self, collection: str, source: str) -> list[Chunk]:
-        """컬렉션의 청크 전부."""
+    def iter_chunks(self, collection: str, source: str) -> Iterator[Chunk]:
+        """컬렉션의 청크 전부를 흘려 준다."""
         ...
 
     def doc_categories(self, collection: str, source: str) -> Mapping[str, frozenset[str]]:
@@ -55,6 +56,8 @@ class SearchSettings:
     reranker_model: str = cross_encoder.MODEL_ID
     top_k: int = TOP_K
     """요청에 k 가 없을 때 돌려주는 건수."""
+    bm25_index: Path | None = None
+    """scripts/build_bm25.py 로 저장한 BM25 색인 폴더. 없거나 비면 시작할 때 PG 청크로 만든다 (서브셋 규모)."""
 
 
 @dataclass(frozen=True)
@@ -90,21 +93,25 @@ class SearchService:
     def build(
         cls, settings: SearchSettings, pg: ChunkCatalog, qdrant: VectorIndex
     ) -> SearchService:
-        """모델을 올리고 PG 청크로 BM25 색인을 만들어 Hybrid + Reranker 를 조립한다.
+        """모델을 올리고 BM25 색인(저장한 것 또는 PG 청크로 새로)을 준비해 Hybrid + Reranker 를 조립한다.
 
         Raises:
           ValueError: 컬렉션에 청크가 없을 때 (적재 전이거나 이름이 틀렸을 때).
         """
-        chunks = pg.all_chunks(settings.collection, settings.source)
-        if not chunks:
-            raise ValueError(f"collection has no chunks: {settings.collection!r}")
+        analyzer = KiwiAnalyzer()
         start = time.perf_counter()
+        index = _bm25_index(settings, pg, analyzer)
+        if not len(index):
+            raise ValueError(f"collection has no chunks: {settings.collection!r}")
+        logger.info("bm25 index: %d chunks in %.1fs", len(index), time.perf_counter() - start)
         bm25 = Bm25Retriever(
-            chunks,
-            KiwiAnalyzer(),
+            index,
+            analyzer,
+            pg,
+            collection=settings.collection,
+            source=settings.source,
             doc_categories=pg.doc_categories(settings.collection, settings.source),
         )
-        logger.info("bm25 index: %d chunks in %.1fs", len(chunks), time.perf_counter() - start)
         dense = DenseRetriever(
             SentenceTransformerEmbedder.load(EMBEDDING_MODELS[settings.model]),
             qdrant,
@@ -121,7 +128,7 @@ class SearchService:
         return cls(
             reranker,
             collection=settings.collection,
-            chunk_count=len(chunks),
+            chunk_count=len(index),
             top_k=settings.top_k,
         )
 
@@ -134,3 +141,11 @@ class SearchService:
             hits = await asyncio.to_thread(self._retriever.search, query, k or self.top_k, filters)
             took_ms = (time.perf_counter() - start) * 1000
         return SearchResult(hits=tuple(hits), took_ms=round(took_ms, 1))
+
+
+def _bm25_index(settings: SearchSettings, pg: ChunkCatalog, analyzer: KiwiAnalyzer) -> Bm25Index:
+    """저장한 색인이 있으면 읽고, 없으면 PG 청크로 만든다."""
+    if settings.bm25_index is not None and (settings.bm25_index / "meta.json").exists():
+        logger.info("bm25 index: loading %s", settings.bm25_index)
+        return Bm25Index.load(settings.bm25_index)
+    return Bm25Index.build(pg.iter_chunks(settings.collection, settings.source), analyzer)

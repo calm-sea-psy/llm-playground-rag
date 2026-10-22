@@ -40,9 +40,11 @@ uv run ruff check
 
 ## 검색 API
 
-인제스트한 컬렉션을 Hybrid(Dense + BM25) → 리랭커 순서로 검색합니다. 시작할 때 임베딩 · 리랭커 모델을 올리고 PG 청크로 BM25 색인을 만듭니다.
+인제스트한 컬렉션을 Hybrid(Dense + BM25) → 리랭커 순서로 검색합니다. 시작할 때 임베딩 · 리랭커 모델을 올리고, `data/index/bm25/{컬렉션}` 에 저장한 BM25 색인을 읽습니다 (없으면 PG 청크로 새로 만듭니다 — 서브셋 규모만).
 
 ```bash
+# BM25 색인을 한 번 만들어 저장 (전체 규모는 수십 분)
+uv run python scripts/build_bm25.py --collection kowiki-subset-10000_kure-v1
 # 컬렉션 기본값은 configs/ingest.yaml 의 store.collection ({source}_{model}). 서브셋은 직접 지정
 RAG_COLLECTION=kowiki-subset-10000_kure-v1 uv run uvicorn playground_rag.api.app:create_app --factory --host 127.0.0.1 --port 8000
 ```

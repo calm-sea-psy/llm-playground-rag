@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS ingest_runs (
 );
 """
 # 청크는 컬렉션(= 소스 × 임베딩 모델 × 청크 설정) 별로 다르므로 (collection, id) 로 구분한다
+ITER_BATCH = 10_000  # 서버 쪽 커서가 한 번에 가져오는 행 수 (청크 1만 개 ≈ 15MB)
 
 
 @dataclass(frozen=True)
@@ -170,6 +171,24 @@ class PgStore:
                 (source, collection),
             )
             return [Chunk(*row) for row in cur.fetchall()]
+
+    def iter_chunks(
+        self, collection: str, source: str, *, batch_size: int = ITER_BATCH
+    ) -> Iterator[Chunk]:
+        """컬렉션의 청크를 (문서 id, 순서) 순으로 흘려 준다. 서버 쪽 커서라 전체를 메모리에 올리지 않는다."""
+        try:
+            with self._conn.cursor(name="iter_chunks") as cur:
+                cur.itersize = batch_size
+                cur.execute(
+                    "SELECT c.id, c.doc_id, d.title, c.section, c.text, c.seq, c.token_count "
+                    "FROM chunks c JOIN documents d ON d.source = %s AND d.id = c.doc_id "
+                    "WHERE c.collection = %s ORDER BY c.doc_id, c.seq",
+                    (source, collection),
+                )
+                for row in cur:
+                    yield Chunk(*row)
+        finally:
+            self._conn.rollback()  # 읽기만 한 트랜잭션을 닫는다
 
     def doc_categories(self, collection: str, source: str) -> dict[str, frozenset[str]]:
         """컬렉션에 청크가 있는 문서마다 분류 집합. BM25 의 분류 필터에 쓴다."""
