@@ -4,7 +4,8 @@
 
 공통 기능은 모듈 레포에서 가져다 씁니다.
 
-- [llm-playground-corpus](https://github.com/calm-sea-psy/llm-playground-corpus) — 문서 · 청크 타입, 토크나이저, 임베딩, parquet 입출력
+- [llm-playground-corpus](https://github.com/calm-sea-psy/llm-playground-corpus) — 문서 · 청크 타입, 토크나이저, 청커, 임베딩, parquet 입출력
+- [llm-playground-llm](https://github.com/calm-sea-psy/llm-playground-llm) — 평가 지표 · KorQuAD 매칭(`playground_evalkit`), LLM 클라이언트(예정)
 
 ## 요구 사항
 
@@ -15,7 +16,8 @@
 ```
 작업 폴더/
 ├── llm-playground-rag/
-└── llm-playground-corpus/
+├── llm-playground-corpus/
+└── llm-playground-llm/
 ```
 
 ## 시작하기
