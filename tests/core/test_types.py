@@ -14,6 +14,7 @@ def _chunk() -> Chunk:
         section="역사",
         text="서울특별시 > 역사\n조선의 수도였다.",
         seq=0,
+        token_count=12,
     )
 
 
