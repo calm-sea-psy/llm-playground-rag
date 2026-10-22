@@ -53,6 +53,12 @@ RAG_COLLECTION=kowiki-subset-10000_kure-v1 uv run uvicorn playground_rag.api.app
 - `GET /health` — 검색 대상 컬렉션 · 색인 청크 수
 - Swagger: http://127.0.0.1:8000/docs
 - Qdrant 는 gRPC(6334)로 접속합니다. REST 로 바꾸려면 `QDRANT_GRPC=0`
+- Qdrant Cloud: `.env.example` 의 Qdrant 항목을 `.env.cloud` 에 채우고(git 제외) `--env-file` 로 넘깁니다. PG 는 로컬 그대로입니다
+
+```bash
+uv run --env-file .env.cloud python scripts/ingest.py --parsed data/parsed/kowiki-subset-10000
+RAG_COLLECTION=kowiki-subset-10000_kure-v1 uv run --env-file .env.cloud uvicorn playground_rag.api.app:create_app --factory --port 8000
+```
 
 ## 구조
 

@@ -10,7 +10,14 @@ from playground_corpus import Chunk, Document, Section
 from qdrant_client import QdrantClient
 from qdrant_client.http.exceptions import ResponseHandlingException
 
-from playground_rag.store import PgConfig, PgStore, QdrantStore, chunk_payload, point_id
+from playground_rag.store import (
+    PgConfig,
+    PgStore,
+    QdrantConfig,
+    QdrantStore,
+    chunk_payload,
+    point_id,
+)
 from playground_rag.store.qdrant import URL as QDRANT_URL
 
 DOCS = [
@@ -36,6 +43,38 @@ CHUNKS = [
         token_count=5,
     ),
 ]
+
+
+def test_qdrant_config_defaults_to_local_grpc(monkeypatch: pytest.MonkeyPatch):
+    for name in ("QDRANT_URL", "QDRANT_API_KEY", "QDRANT_GRPC", "QDRANT_TIMEOUT"):
+        monkeypatch.delenv(name, raising=False)
+
+    assert QdrantConfig.from_env() == QdrantConfig(
+        url=QDRANT_URL, api_key=None, prefer_grpc=True, timeout=None
+    )
+
+
+def test_qdrant_config_reads_cloud_settings_and_hides_key(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("QDRANT_URL", "https://example.cloud.qdrant.io:6333")
+    monkeypatch.setenv("QDRANT_API_KEY", "secret-key")
+    monkeypatch.setenv("QDRANT_GRPC", "0")
+    monkeypatch.setenv("QDRANT_TIMEOUT", "60")
+
+    config = QdrantConfig.from_env()
+
+    assert config.url == "https://example.cloud.qdrant.io:6333"
+    assert config.api_key == "secret-key"
+    assert (config.prefer_grpc, config.timeout) == (False, 60)
+    assert "secret-key" not in repr(config)
+
+
+def test_qdrant_config_treats_empty_values_as_unset(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("QDRANT_URL", "")
+    monkeypatch.setenv("QDRANT_API_KEY", "")  # .env.example 를 복사만 하고 비워 둔 경우
+
+    config = QdrantConfig.from_env()
+
+    assert (config.url, config.api_key) == (QDRANT_URL, None)
 
 
 def test_point_id_is_stable_uuid():

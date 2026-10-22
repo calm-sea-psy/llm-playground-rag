@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import uuid
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 from numpy.typing import NDArray
@@ -17,6 +17,33 @@ UPSERT_BATCH = 512  # 요청 하나에 1024d 벡터 512개 ≈ 2MB
 _POINT_NAMESPACE = uuid.UUID(
     "6f3c7a52-0d1e-4c3b-9a55-2b8f1e7c4d90"
 )  # 청크 id → 점 id (uuid5) 네임스페이스
+
+
+@dataclass(frozen=True)
+class QdrantConfig:
+    """접속 설정. 기본값은 docker-compose.yml 의 로컬 Qdrant."""
+
+    url: str = URL
+    api_key: str | None = field(default=None, repr=False)
+    """Qdrant Cloud 키. 로컬은 None. 로그에 찍히지 않게 repr 에서 뺀다."""
+    prefer_grpc: bool = True
+    """REST 는 질의 하나에 약 16ms 가 더 든다 (서버 검색 약 1.5ms, Windows + Docker Desktop). gRPC 는 약 1.8ms."""
+    timeout: int | None = None
+    """요청 시간 제한(초). None 이면 클라이언트 기본 5초."""
+
+    @classmethod
+    def from_env(cls) -> QdrantConfig:
+        """QDRANT_URL · QDRANT_API_KEY · QDRANT_GRPC(0 이면 REST) · QDRANT_TIMEOUT 에서 읽는다.
+
+        값은 `uv run --env-file .env.cloud ...` 처럼 파일로 넘길 수 있다 (.env* 는 git 제외).
+        """
+        timeout = os.environ.get("QDRANT_TIMEOUT")
+        return cls(
+            url=os.environ.get("QDRANT_URL") or URL,
+            api_key=os.environ.get("QDRANT_API_KEY") or None,
+            prefer_grpc=os.environ.get("QDRANT_GRPC", "1") != "0",
+            timeout=int(timeout) if timeout else None,
+        )
 
 
 @dataclass(frozen=True)
@@ -73,21 +100,22 @@ class QdrantStore:
         self._client = client
 
     @classmethod
-    def from_env(cls) -> QdrantStore:
-        """QDRANT_URL(기본 http://localhost:6333)로 접속한다. QDRANT_GRPC=0 이 아니면 gRPC(6334)를 쓴다.
-
-        REST 는 질의 하나에 약 16ms 가 더 든다 (서버 검색 약 1.5ms, Windows + Docker Desktop 에서 측정).
-        gRPC 는 약 1.8ms. QDRANT_TIMEOUT(초)이 있으면 요청 시간 제한으로 쓴다 (없으면 클라이언트 기본 5초).
-        """
-        timeout = os.environ.get("QDRANT_TIMEOUT")
+    def connect(cls, config: QdrantConfig) -> QdrantStore:
+        """설정대로 클라이언트를 만든다. 실제 접속은 첫 요청 때 일어난다."""
         return cls(
             QdrantClient(
-                url=os.environ.get("QDRANT_URL", URL),
-                prefer_grpc=os.environ.get("QDRANT_GRPC", "1") != "0",
-                timeout=int(timeout) if timeout else None,
+                url=config.url,
+                api_key=config.api_key,
+                prefer_grpc=config.prefer_grpc,
+                timeout=config.timeout,
                 check_compatibility=False,
             )
         )
+
+    @classmethod
+    def from_env(cls) -> QdrantStore:
+        """환경변수 설정(QdrantConfig.from_env)으로 접속한다."""
+        return cls.connect(QdrantConfig.from_env())
 
     def ensure_collection(self, name: str, dim: int, *, on_disk: bool = True) -> None:
         """컬렉션이 없으면 만든다: 코사인 거리, int8 스칼라 양자화(RAM), 원본 벡터는 on_disk."""
@@ -102,11 +130,11 @@ class QdrantStore:
                 scalar=models.ScalarQuantizationConfig(type=models.ScalarType.INT8, always_ram=True)
             ),
         )
-        for field, schema in (
+        for payload_field, schema in (
             ("doc_id", models.PayloadSchemaType.KEYWORD),
             ("categories", models.PayloadSchemaType.KEYWORD),
         ):
-            self._client.create_payload_index(name, field_name=field, field_schema=schema)
+            self._client.create_payload_index(name, field_name=payload_field, field_schema=schema)
 
     def delete_collection(self, name: str) -> None:
         """컬렉션을 지운다 (없으면 아무 일도 하지 않음)."""
