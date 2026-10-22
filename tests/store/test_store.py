@@ -98,6 +98,7 @@ def test_pg_reads_all_chunks_and_categories_of_collection(pg: PgStore):
     assert pg.all_chunks("kowiki_test", "kowiki") == CHUNKS
     assert pg.all_chunks("other", "kowiki") == CHUNKS[:1]
     assert list(pg.iter_chunks("kowiki_test", "kowiki", batch_size=1)) == CHUNKS
+    assert pg.collection_titles("other", "kowiki") == {"서울"}
     assert pg.count("chunks") == 3  # 흘려 읽은 뒤 rollback 해도 적재한 청크는 남는다
     assert pg.doc_categories("kowiki_test", "kowiki") == {
         "1": frozenset({"도시"}),

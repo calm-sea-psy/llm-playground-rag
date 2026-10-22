@@ -190,6 +190,16 @@ class PgStore:
         finally:
             self._conn.rollback()  # 읽기만 한 트랜잭션을 닫는다
 
+    def collection_titles(self, collection: str, source: str) -> set[str]:
+        """컬렉션에 청크가 있는 문서의 제목. 평가 질문을 정답 문서가 있는 것으로 거를 때 쓴다."""
+        with self._conn.cursor() as cur:
+            cur.execute(
+                "SELECT d.title FROM documents d WHERE d.source = %s AND EXISTS "
+                "(SELECT 1 FROM chunks c WHERE c.collection = %s AND c.doc_id = d.id)",
+                (source, collection),
+            )
+            return {title for (title,) in cur.fetchall()}
+
     def doc_categories(self, collection: str, source: str) -> dict[str, frozenset[str]]:
         """컬렉션에 청크가 있는 문서마다 분류 집합. BM25 의 분류 필터에 쓴다."""
         with self._conn.cursor() as cur:

@@ -11,6 +11,7 @@
 사용법:
   uv run python scripts/eval_retrieval.py --retriever bm25
   uv run python scripts/eval_retrieval.py --retriever bm25 --max-tokens 256 384 512
+  uv run python scripts/eval_retrieval.py --retriever hybrid-rerank --from-store --collection kowiki_kure-v1 --model kure-v1
 """
 
 import argparse
@@ -41,6 +42,7 @@ from playground_evalkit import (
 
 from playground_rag.core import Retriever
 from playground_rag.retrieval import (
+    Bm25Index,
     Bm25Retriever,
     CrossEncoderScorer,
     DenseRetriever,
@@ -51,6 +53,7 @@ from playground_rag.retrieval import (
 from playground_rag.store import PgConfig, PgStore, QdrantStore
 
 SUBSET = Path("data/parsed/kowiki-subset-10000")
+BM25_INDEX_DIR = Path("data/index/bm25")  # scripts/build_bm25.py 가 저장하는 곳
 TOKENIZER = "BAAI/bge-m3"  # 후보 임베딩 3종이 같은 XLM-R 토크나이저라 청크 경계가 같다
 TOP_K = 10
 SOURCE = "kowiki"
@@ -68,12 +71,19 @@ def main() -> None:
         raise SystemExit(
             "dense · hybrid 는 --model · --collection 과 그 컬렉션의 --max-tokens 하나가 필요하다"
         )
+    if args.from_store and (not args.collection or len(args.max_tokens) != 1):
+        raise SystemExit("--from-store 는 --collection 과 그 컬렉션의 --max-tokens 하나가 필요하다")
     run_id = args.run_id or f"{datetime.now(tz=UTC):%Y-%m-%d}-retrieval-{'-'.join(args.retriever)}"
     summary = json.loads((args.subset / "subset.json").read_text(encoding="utf-8"))
-    documents = list(read_documents(args.subset / "docs-00000.parquet"))
-    if args.limit_docs:  # scripts/ingest.py --limit-docs 와 같은 규칙 (앞에서부터)
-        documents = documents[: args.limit_docs]
-    titles = {doc.title for doc in documents}
+    pg = PgStore.connect(PgConfig.from_env()) if needs_dense or args.from_store else None
+    if pg is not None and args.from_store:
+        documents = []
+        titles = pg.collection_titles(args.collection, SOURCE)
+    else:
+        documents = list(read_documents(args.subset / "docs-00000.parquet"))
+        if args.limit_docs:  # scripts/ingest.py --limit-docs 와 같은 규칙 (앞에서부터)
+            documents = documents[: args.limit_docs]
+        titles = {doc.title for doc in documents}
     items = [
         item
         for item in load_korquad(
@@ -82,9 +92,9 @@ def main() -> None:
         if item.title in titles
     ]
     tokenizer = HFTokenizer.from_pretrained(TOKENIZER)
-    print(f"documents={len(documents)} questions={len(items)} run_id={run_id}")
+    print(f"documents={len(titles)} questions={len(items)} run_id={run_id}")
 
-    dense = _dense(args) if needs_dense else None
+    dense = _dense(args, pg) if pg is not None and needs_dense else None
     scorer = (
         CrossEncoderScorer.load()
         if any(n.endswith(RERANK_SUFFIX) for n in args.retriever)
@@ -92,11 +102,22 @@ def main() -> None:
     )
     rows = []
     for max_tokens in args.max_tokens:
-        chunker = Chunker(tokenizer, ChunkingConfig(max_tokens=max_tokens))
-        chunks = [chunk for doc in documents for chunk in chunker.chunk(doc)]
         start = time.perf_counter()
-        bm25 = Bm25Retriever.from_chunks(chunks, KiwiAnalyzer())
+        if pg is not None and args.from_store:
+            # 저장한 색인을 읽으므로 build_sec 는 읽는 시간 (만든 시간은 색인 meta.json)
+            bm25 = Bm25Retriever(
+                Bm25Index.load(BM25_INDEX_DIR / args.collection),
+                KiwiAnalyzer(),
+                pg,
+                collection=args.collection,
+                source=SOURCE,
+            )
+        else:
+            chunker = Chunker(tokenizer, ChunkingConfig(max_tokens=max_tokens))
+            chunks = [chunk for doc in documents for chunk in chunker.chunk(doc)]
+            bm25 = Bm25Retriever.from_chunks(chunks, KiwiAnalyzer())
         bm25_build_sec = time.perf_counter() - start
+        chunk_count = len(bm25.index)
         for name in args.retriever:
             retriever = _retriever(name, bm25, dense, scorer)
             # dense 색인은 ingest 에서 만든다
@@ -105,13 +126,13 @@ def main() -> None:
             write_records(
                 Path("data/runs") / run_id / f"records-{name}-{max_tokens}.jsonl", records
             )
-            rows.append({**row, "chunks": len(chunks), "build_sec": round(build_sec, 1)})
+            rows.append({**row, "chunks": chunk_count, "build_sec": round(build_sec, 1)})
             print(
                 f"{name} {max_tokens}: hit@5={row['hit_at_5']:.3f} mrr={row['mrr_at_10']:.3f} "
                 f"doc_hit@5={row['doc_hit_at_5']:.3f} p50={row['p50_ms']}ms build={build_sec:.0f}s"
             )
 
-    _write_report(run_id, rows, len(documents), len(items), args)
+    _write_report(run_id, rows, len(titles), len(items), args)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -128,14 +149,18 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--collection", default="", help="dense 가 검색할 Qdrant 컬렉션 (scripts/ingest.py 로 적재)"
     )
+    parser.add_argument(
+        "--from-store",
+        action="store_true",
+        help="서브셋 parquet 대신 적재한 컬렉션(PG 청크 · 저장한 BM25 색인)으로. 전체 코퍼스 평가용",
+    )
     parser.add_argument("--run-id", default="")
     return parser.parse_args()
 
 
-def _dense(args: argparse.Namespace) -> DenseRetriever:
+def _dense(args: argparse.Namespace, pg: PgStore) -> DenseRetriever:
     """적재된 컬렉션을 검색하는 Dense 검색기. PG 접속은 스크립트가 끝날 때까지 연다."""
     embedder = SentenceTransformerEmbedder.load(EMBEDDING_MODELS[args.model])
-    pg = PgStore.connect(PgConfig.from_env())
     return DenseRetriever(
         embedder, QdrantStore.from_env(), pg, collection=args.collection, source=SOURCE
     )
@@ -232,12 +257,21 @@ def _write_report(
         "top1_hit_median",
         "top1_miss_median",
     ]
+    if args.from_store:
+        scope = (
+            f"- 컬렉션: `{args.collection}` 문서 {documents:,}개 · KorQuAD dev 질문 {questions:,}개 "
+            "(정답 문서가 컬렉션에 있는 질문). BM25 는 저장한 색인, 청크는 PG\n"
+        )
+    else:
+        scope = (
+            f"- 서브셋: `{args.subset.name}` 문서 {documents:,}개 · KorQuAD dev 질문 {questions:,}개 (정답 문서가 서브셋에 있는 질문)\n"
+            "- **서브셋 수치는 상대 비교 전용** — 방해 문서가 적어 전체 코퍼스보다 높게 나온다\n"
+        )
     report = (
         f"# 검색 평가 — {run_id}\n\n"
-        f"- 서브셋: `{args.subset.name}` 문서 {documents:,}개 · KorQuAD dev 질문 {questions:,}개 (정답 문서가 서브셋에 있는 질문)\n"
-        f"- 청킹: `{TOKENIZER}` 토크나이저 기준 (후보 임베딩 3종과 같은 청크 경계)\n"
+        + scope
+        + f"- 청킹: `{TOKENIZER}` 토크나이저 기준 (후보 임베딩 3종과 같은 청크 경계)\n"
         "- 정답 판정: evalkit `contains_answer` (제목 일치 + 공백 무시 정답 포함) — CORPUS 임베딩 벤치와 같은 규칙\n"
-        "- **서브셋 수치는 상대 비교 전용** — 방해 문서가 적어 전체 코퍼스보다 높게 나온다\n"
         "- 지연은 질의 하나의 검색 시간 (색인은 미리 만든 상태)\n"
         "- `top1_hit_median` · `top1_miss_median`: 1위가 정답일 때 · 아닐 때의 1위 점수 중앙값 "
         "(검색기마다 척도가 다르다 — 리랭커는 0~1)\n\n" + render_table(rows, columns)
