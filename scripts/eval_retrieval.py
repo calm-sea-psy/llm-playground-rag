@@ -19,7 +19,14 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
-from playground_corpus import Chunk, Chunker, ChunkingConfig, HFTokenizer, read_documents
+from playground_corpus import (
+    EMBEDDING_MODELS,
+    Chunker,
+    ChunkingConfig,
+    HFTokenizer,
+    SentenceTransformerEmbedder,
+    read_documents,
+)
 from playground_evalkit import (
     KorQuADItem,
     ResultRecord,
@@ -32,19 +39,28 @@ from playground_evalkit import (
 )
 
 from playground_rag.core import Retriever
-from playground_rag.retrieval import Bm25Retriever, KiwiAnalyzer
+from playground_rag.retrieval import Bm25Retriever, DenseRetriever, HybridRetriever, KiwiAnalyzer
+from playground_rag.store import PgConfig, PgStore, QdrantStore
 
 SUBSET = Path("data/parsed/kowiki-subset-10000")
 TOKENIZER = "BAAI/bge-m3"  # 후보 임베딩 3종이 같은 XLM-R 토크나이저라 청크 경계가 같다
 TOP_K = 10
-RETRIEVERS = ("bm25",)
+SOURCE = "kowiki"
+RETRIEVERS = ("bm25", "dense", "hybrid")  # hybrid = dense + bm25 RRF
 
 
 def main() -> None:
     args = _parse_args()
+    needs_dense = bool({"dense", "hybrid"} & set(args.retriever))
+    if needs_dense and (not args.collection or len(args.max_tokens) != 1):
+        raise SystemExit(
+            "dense · hybrid 는 --model · --collection 과 그 컬렉션의 --max-tokens 하나가 필요하다"
+        )
     run_id = args.run_id or f"{datetime.now(tz=UTC):%Y-%m-%d}-retrieval-{'-'.join(args.retriever)}"
     summary = json.loads((args.subset / "subset.json").read_text(encoding="utf-8"))
     documents = list(read_documents(args.subset / "docs-00000.parquet"))
+    if args.limit_docs:  # scripts/ingest.py --limit-docs 와 같은 규칙 (앞에서부터)
+        documents = documents[: args.limit_docs]
     titles = {doc.title for doc in documents}
     items = [
         item
@@ -56,14 +72,19 @@ def main() -> None:
     tokenizer = HFTokenizer.from_pretrained(TOKENIZER)
     print(f"documents={len(documents)} questions={len(items)} run_id={run_id}")
 
+    dense = _dense(args) if needs_dense else None
     rows = []
     for max_tokens in args.max_tokens:
         chunker = Chunker(tokenizer, ChunkingConfig(max_tokens=max_tokens))
         chunks = [chunk for doc in documents for chunk in chunker.chunk(doc)]
+        start = time.perf_counter()
+        bm25 = Bm25Retriever(chunks, KiwiAnalyzer())
+        bm25_build_sec = time.perf_counter() - start
         for name in args.retriever:
-            start = time.perf_counter()
-            retriever = _build(name, chunks)
-            build_sec = time.perf_counter() - start
+            retriever = _retriever(name, bm25, dense)
+            build_sec = (
+                0.0 if name == "dense" else bm25_build_sec
+            )  # dense 색인은 ingest 에서 만든다
             row, records = _evaluate(run_id, name, max_tokens, retriever, items)
             write_records(
                 Path("data/runs") / run_id / f"records-{name}-{max_tokens}.jsonl", records
@@ -82,14 +103,34 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--retriever", nargs="+", default=["bm25"], choices=RETRIEVERS)
     parser.add_argument("--subset", type=Path, default=SUBSET)
     parser.add_argument("--max-tokens", nargs="+", type=int, default=[384])
+    parser.add_argument(
+        "--limit-docs", type=int, default=0, help="앞에서부터 이만큼 문서만 (ingest 와 맞춘다)"
+    )
+    parser.add_argument(
+        "--model", default="bge-m3", choices=list(EMBEDDING_MODELS), help="dense 질의 임베딩 모델"
+    )
+    parser.add_argument(
+        "--collection", default="", help="dense 가 검색할 Qdrant 컬렉션 (scripts/ingest.py 로 적재)"
+    )
     parser.add_argument("--run-id", default="")
     return parser.parse_args()
 
 
-def _build(name: str, chunks: list[Chunk]) -> Retriever:
+def _dense(args: argparse.Namespace) -> DenseRetriever:
+    """적재된 컬렉션을 검색하는 Dense 검색기. PG 접속은 스크립트가 끝날 때까지 연다."""
+    embedder = SentenceTransformerEmbedder.load(EMBEDDING_MODELS[args.model])
+    pg = PgStore.connect(PgConfig.from_env())
+    return DenseRetriever(
+        embedder, QdrantStore.from_env(), pg, collection=args.collection, source=SOURCE
+    )
+
+
+def _retriever(name: str, bm25: Bm25Retriever, dense: DenseRetriever | None) -> Retriever:
     if name == "bm25":
-        return Bm25Retriever(chunks, KiwiAnalyzer())
-    raise ValueError(f"unknown retriever: {name}")
+        return bm25
+    if dense is None:
+        raise SystemExit(f"{name} 는 --collection 이 필요하다")
+    return dense if name == "dense" else HybridRetriever([dense, bm25])
 
 
 def _evaluate(
