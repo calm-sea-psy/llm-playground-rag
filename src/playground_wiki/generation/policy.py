@@ -1,6 +1,6 @@
 """3단계 답변 정책: 리랭커 1위 점수로 grounded · partial · refuse 를 고르고 단계별 생성 설정을 붙인다.
 
-의도 분류기를 두지 않고 이 정책이 라우터 역할을 한다 (ADR-021). refuse 는 LLM 을 부르지 않는다.
+이 정책이 라우터 역할을 한다 (ADR-021). refuse 는 LLM 을 부르지 않는다.
 """
 
 from collections.abc import Mapping, Sequence
