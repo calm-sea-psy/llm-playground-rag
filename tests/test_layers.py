@@ -26,6 +26,8 @@ ALLOWED_INTERNAL = {
 }
 LIBRARY = ("core", "store", "retrieval", "eval")
 # 라이브러리 쪽에서 쓰면 안 되는 외부 패키지: 웹 · 설정 파일은 제품 쪽 일, DB 클라이언트는 store 만
+# 어디서도 쓰면 안 되는 외부 패키지. api/** 는 pydantic 때문에 ruff TID251 을 꺼 두어 ruff 로는 못 잡는다
+BANNED_EVERYWHERE = frozenset({"ollama", "openai"})  # LLM 은 playground_llm 으로만 부른다
 BANNED_EXTERNAL = {
     "core": {"fastapi", "pydantic", "yaml", "psycopg", "qdrant_client", "faiss", "torch"},
     "store": {"fastapi", "pydantic", "yaml"},
@@ -49,7 +51,7 @@ def _imports(path: Path) -> list[tuple[int, str]]:
 def _violations(package: str, src: Path = SRC) -> list[tuple[str, int, str]]:
     """규칙을 어긴 import 를 (패키지 안 파일 경로, 줄, 모듈 이름) 으로."""
     allowed = ALLOWED_INTERNAL[package] | {package}
-    banned = BANNED_EXTERNAL.get(package, set())
+    banned = BANNED_EXTERNAL.get(package, set()) | BANNED_EVERYWHERE
     problems = []
     for path in sorted((src / package).rglob("*.py")):
         for line, module in _imports(path):
@@ -92,3 +94,12 @@ def test_checker_catches_imports_inside_functions(tmp_path: Path):
         ("retrieval/bad.py", 3, "playground_rag.api"),
         ("retrieval/bad.py", 4, "yaml"),
     ]
+
+
+def test_checker_bans_llm_clients_even_in_api(tmp_path: Path):
+    (tmp_path / "api").mkdir()
+    (tmp_path / "api" / "bad.py").write_text(
+        "import pydantic\nfrom ollama import Client\n", encoding="utf-8"
+    )
+
+    assert _violations("api", tmp_path) == [("api/bad.py", 2, "ollama")]
