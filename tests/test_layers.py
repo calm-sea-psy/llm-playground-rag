@@ -2,6 +2,7 @@
 
 ingest ← sources      (위키 덤프 정제 · 파싱)
 generation            (답변 정책 · 생성 설정 — 검색 결과를 받기만 한다)
+evaluation            (평가 문항 나누기 · 표본 — 스크립트가 쓴다)
 전부 ← api             (제품 API)
 """
 
@@ -18,6 +19,7 @@ ALLOWED_INTERNAL = {
     "ingest": set(),
     "sources": {"ingest"},
     "generation": set(),
+    "evaluation": set(),
     "api": {"ingest", "sources", "generation"},
 }
 # 어디서도 쓰면 안 되는 외부 패키지. api/** 는 pydantic 때문에 ruff TID251 을 꺼 두어 ruff 로는 못 잡는다
@@ -34,6 +36,7 @@ BANNED_EXTERNAL = {
     "sources": {"fastapi", "pydantic", "psycopg", "qdrant_client", "playground_retrieval"},
     # 설정 파일은 api · scripts 만 읽는다. 정책은 저장소에 붙지 않고 검색 결과(Hit)만 받는다
     "generation": {"fastapi", "pydantic", "psycopg", "qdrant_client", "yaml"},
+    "evaluation": {"fastapi", "pydantic", "psycopg", "qdrant_client", "yaml"},
 }
 
 

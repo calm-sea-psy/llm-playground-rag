@@ -41,10 +41,17 @@ def _repo_profiles() -> dict:
 def test_repo_answer_yaml_profiles_build_a_policy():
     profiles = _repo_profiles()
 
+    # partial 도 think off — think on · 2048 은 위키 밖 질문 대부분에 빈 답 (ADR-025)
     assert profiles["grounded"].spec.think is Think.OFF
-    assert profiles["partial"].spec.think is Think.ON
+    assert profiles["partial"].spec.think is Think.OFF
     assert all(profile.system[0].startswith("base@") for profile in profiles.values())
     AnswerPolicy(Thresholds(high=1.0, low=0.0), profiles)  # 단계 구성이 맞는지
+
+
+def test_repo_answer_yaml_has_calibrated_thresholds():
+    policy = load_answer_policy(CONFIG_DIR)
+
+    assert 0 < policy.thresholds.low < policy.thresholds.high < 1
 
 
 def test_repo_profiles_point_to_repo_prompts():
