@@ -1,0 +1,23 @@
+# 답변 정책 — 리랭커 1위 점수로 단계를 고르고, 단계마다 생성 설정(프로필)을 쓴다 (ADR-021)
+
+thresholds:
+  high: null              # 이 이상이면 grounded. scripts/calibrate_threshold.py 로 정한다
+  low: null               # 이 이상이면 partial, 미만이면 refuse
+
+# 단계별 프로필. 한 행 = 벤치 · 평가 기록의 키 (spec_id, 프롬프트 버전). refuse 는 LLM 을 부르지 않아 행이 없다.
+# 모델 · 값은 F4 벤치 전 임시 — LLM 레포 models/*.yaml 결과로 바꾸고 출처를 적는다.
+# think 는 따옴표로 쓴다 — YAML 은 off · on 을 bool 로 읽는데, ModelSpec 은 bool 을 받지 않는다.
+# think 가 켜지면 thinking 토큰도 max_tokens(Ollama num_predict) 안에서 쓴다.
+profiles:
+  grounded:               # 문맥에서 답을 찾는다 — thinking 없이
+    provider: ollama
+    model: gemma4:12b
+    params: {think: "off", temperature: 0.1, max_tokens: 512, num_ctx: 8192}
+    prompts: [base@v1, grounded@v1]
+    timeout_sec: 60
+  partial:                # 근거와 일반 지식을 나눠 답한다 — 판단이 가장 많이 들어 think on 1순위 후보
+    provider: ollama
+    model: gemma4:12b
+    params: {think: "on", temperature: 0.1, max_tokens: 2048, num_ctx: 8192}
+    prompts: [base@v1, partial@v1]
+    timeout_sec: 120
