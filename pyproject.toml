@@ -14,7 +14,7 @@ dependencies = [
     "mwparserfromhell>=0.7.2",
     "playground-corpus[parquet,local]",
     "playground-evalkit",
-    "playground-llm",
+    "playground-llm[ollama]",
     "playground-retrieval[rerank]",
     "pyyaml>=6.0.3",
     "qdrant-client>=1.19.1",
