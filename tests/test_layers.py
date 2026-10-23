@@ -1,6 +1,7 @@
 """하위 패키지 사이 의존 방향 검사. 검색 엔진은 playground_retrieval 모듈이고, 이 레포는 위키 제품 쪽만 갖는다.
 
 ingest ← sources      (위키 덤프 정제 · 파싱)
+generation            (답변 정책 · 생성 설정 — 검색 결과를 받기만 한다)
 전부 ← api             (제품 API)
 """
 
@@ -16,7 +17,8 @@ SRC = Path(__file__).parents[1] / "src" / PACKAGE
 ALLOWED_INTERNAL = {
     "ingest": set(),
     "sources": {"ingest"},
-    "api": {"ingest", "sources"},
+    "generation": set(),
+    "api": {"ingest", "sources", "generation"},
 }
 # 어디서도 쓰면 안 되는 외부 패키지. api/** 는 pydantic 때문에 ruff TID251 을 꺼 두어 ruff 로는 못 잡는다
 BANNED_EVERYWHERE = frozenset(
@@ -30,6 +32,8 @@ BANNED_EVERYWHERE = frozenset(
 BANNED_EXTERNAL = {
     "ingest": {"fastapi", "pydantic", "psycopg", "qdrant_client", "playground_retrieval"},
     "sources": {"fastapi", "pydantic", "psycopg", "qdrant_client", "playground_retrieval"},
+    # 설정 파일은 api · scripts 만 읽는다. 정책은 저장소에 붙지 않고 검색 결과(Hit)만 받는다
+    "generation": {"fastapi", "pydantic", "psycopg", "qdrant_client", "yaml"},
 }
 
 

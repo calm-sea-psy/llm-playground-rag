@@ -1,4 +1,4 @@
-# 검색 설정 — 하이브리드 검색 · 리랭커 · 답변 정책 임계값
+# 검색 설정 — 하이브리드 검색 · 리랭커 (답변 정책 임계값은 answer.yaml)
 
 dense:
   top_k: 50
@@ -15,7 +15,3 @@ fusion:
 reranker:
   model: BAAI/bge-reranker-v2-m3
   top_k: 5
-
-policy:
-  t_high: null            # Phase 2 calibrate_threshold.py 로 결정
-  t_low: null
