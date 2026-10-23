@@ -77,12 +77,26 @@ tests/
 data/                    덤프 · 파싱 결과 · 임베딩 (git 제외)
 ```
 
+## 주요 결과
+
+한국어 위키백과 2026-10-01 덤프: 문서 488,963 · 청크 2,393,485 (KURE-v1 · 384토큰). 질문은 KorQuAD 1.0 dev 5,766문항.
+
+| 검색기 | hit@5 (전체) | hit@5 (서브셋 1만) | 리포트 |
+|---|---|---|---|
+| Dense | 0.691 | 0.846 | |
+| BM25 (Kiwi) | 0.723 | 0.859 | |
+| Hybrid (RRF) | 0.767 | 0.882 | |
+| **Hybrid + 리랭커** | **0.834** | **0.911** | [전체](reports/2026-10-23-retrieval-full.md) · [서브셋](reports/2026-10-22-retrieval-d12.md) |
+
+- ANN: FAISS (Flat · HNSW · IVF · SQ8 · PQ) vs Qdrant (float · int8 · int8+rescore) recall–지연 — [reports/ann-benchmark.md](reports/ann-benchmark.md)
+- 서브셋 수치는 검색기 사이 상대 비교용이다 (방해 문서가 적어 높게 나온다)
+
 ## 진행 상황
 
 - [x] Phase 0 — 골격
 - [x] Phase 0.5 — 모듈 분리
 - [x] Phase 1 — 인제스트 + 검색 + 모델 선정
-- [ ] Phase 1.5 — 전체 인제스트
+- [x] Phase 1.5 — 전체 인제스트
 - [ ] Phase 2 — 단발 RAG 챗봇
 - [ ] Phase 3 — 에이전트
 - [ ] Phase 4 — 웹소설 프로젝트 연결 + 데모
