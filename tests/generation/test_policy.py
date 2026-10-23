@@ -7,10 +7,16 @@ from playground_wiki.generation import AnswerPolicy, Profile, Thresholds
 
 THRESHOLDS = Thresholds(high=0.9, low=0.5)
 GROUNDED = Profile(
-    ModelSpec("ollama", "gemma4:12b", {"think": Think.OFF}), ("base@v1", "grounded@v1"), 60
+    ModelSpec("ollama", "gemma4:12b", {"think": Think.OFF}),
+    system=("base@v1", "grounded@v1"),
+    user="question@v1",
+    timeout_sec=60,
 )
 PARTIAL = Profile(
-    ModelSpec("ollama", "gemma4:12b", {"think": Think.ON}), ("base@v1", "partial@v1"), 120
+    ModelSpec("ollama", "gemma4:12b", {"think": Think.ON}),
+    system=("base@v1", "partial@v1"),
+    user="question@v1",
+    timeout_sec=120,
 )
 POLICY = AnswerPolicy(THRESHOLDS, {"grounded": GROUNDED, "partial": PARTIAL})
 
@@ -87,7 +93,9 @@ def test_policy_needs_profiles_for_exactly_grounded_and_partial(stages: set[str]
 
 
 def test_profile_rejects_empty_prompts_and_non_positive_timeout():
-    with pytest.raises(ValueError, match="prompts"):
-        Profile(GROUNDED.spec, (), 60)
+    with pytest.raises(ValueError, match="prompts must not be empty"):
+        Profile(GROUNDED.spec, system=(), user="question@v1", timeout_sec=60)
+    with pytest.raises(ValueError, match="prompts must not be empty"):
+        Profile(GROUNDED.spec, system=("base@v1",), user="", timeout_sec=60)
     with pytest.raises(ValueError, match="timeout_sec"):
-        Profile(GROUNDED.spec, ("base@v1",), 0)
+        Profile(GROUNDED.spec, system=("base@v1",), user="question@v1", timeout_sec=0)

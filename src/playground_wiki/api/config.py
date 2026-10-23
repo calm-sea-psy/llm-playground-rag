@@ -17,7 +17,7 @@ CONFIG_DIR = Path("configs")  # 레포 루트에서 실행할 때. RAG_CONFIG_DI
 BM25_INDEX_DIR = Path("data/index/bm25")  # scripts/build_bm25.py 가 {컬렉션} 폴더로 저장한다
 ANSWER_CONFIG = "answer.yaml"
 # answer.yaml 프로필 한 행의 키. 오타 난 키가 조용히 무시되지 않게 정확히 이 집합이어야 한다
-PROFILE_KEYS = frozenset({"provider", "model", "params", "prompts", "timeout_sec"})
+PROFILE_KEYS = frozenset({"provider", "model", "params", "system", "user", "timeout_sec"})
 
 
 @dataclass(frozen=True)
@@ -93,6 +93,7 @@ def _profile(stage: str, row: Mapping[str, Any]) -> Profile:
     }
     return Profile(
         spec=ModelSpec(row["provider"], row["model"], params),
-        prompts=tuple(row["prompts"]),
+        system=tuple(row["system"]),
+        user=row["user"],
         timeout_sec=float(row["timeout_sec"]),
     )

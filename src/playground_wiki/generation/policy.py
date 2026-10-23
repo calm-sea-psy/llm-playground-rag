@@ -45,14 +45,16 @@ class Profile:
 
     spec: ModelSpec
     """모델과 생성 설정 (think · max_tokens · temperature …). think 를 바꾸면 spec_id 가 달라진다."""
-    prompts: tuple[str, ...]
-    """이어 붙일 프롬프트 `이름@버전`. 공통 베이스가 먼저, 단계 블록이 뒤."""
+    system: tuple[str, ...]
+    """system 턴에 이어 붙일 프롬프트 `이름@버전`. 공통 베이스가 먼저, 단계 블록이 뒤. 지시만 — 문서는 넣지 않는다."""
+    user: str
+    """user 턴 프롬프트 `이름@버전`. 검색한 문서와 질문이 여기에 들어간다."""
     timeout_sec: float
     """답 하나를 기다리는 상한."""
 
     def __post_init__(self) -> None:
-        if not self.prompts:
-            raise ValueError("prompts must not be empty")
+        if not self.system or not self.user:
+            raise ValueError("system and user prompts must not be empty")
         if self.timeout_sec <= 0:
             raise ValueError(f"timeout_sec must be > 0, got {self.timeout_sec=}")
 
