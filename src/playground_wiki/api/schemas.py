@@ -2,10 +2,9 @@
 
 from typing import Literal
 
+from playground_retrieval.core import Filters, Hit
+from playground_retrieval.search import SearchResult
 from pydantic import BaseModel, ConfigDict, Field
-
-from playground_rag.core import Filters, Hit
-from playground_rag.retrieval import SearchResult
 
 MAX_QUERY_CHARS = 300  # 리랭커 입력 = 질의 + 청크(384토큰) ≤ 1024토큰. 한국어 300자는 약 200토큰
 MAX_K = 50

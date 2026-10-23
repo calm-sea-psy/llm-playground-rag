@@ -13,7 +13,7 @@ from urllib.parse import quote
 from lxml import etree
 from playground_corpus import Document
 
-from playground_rag.ingest.cleaner import WikiCleaner
+from playground_wiki.ingest.cleaner import WikiCleaner
 
 logger = logging.getLogger(__name__)
 

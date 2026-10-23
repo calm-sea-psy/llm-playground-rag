@@ -1,9 +1,10 @@
-# llm-playground-rag
+# llm-playground-wiki
 
-한국어 위키백과 덤프로 RAG 파이프라인(파싱 → 정제 → 청킹 → 임베딩 → 저장 → 검색)을 처음부터 구축하고, 그 위에 위키 검색 기반 한국어 QA 챗봇을 올리는 프로젝트입니다.
+한국어 위키백과 QA 제품입니다. 위키 덤프를 파싱 · 정제해 검색 엔진에 넣고, 위키 검색 서비스(`/search`)와 위키 근거 답변 챗봇(`/ask`, 다음 단계)을 제공합니다. 다른 제품(소설 프로젝트 등)은 이 서비스를 HTTP 로 불러 리서치에 씁니다.
 
 공통 기능은 모듈 레포에서 가져다 씁니다.
 
+- [llm-playground-retrieval](https://github.com/calm-sea-psy/llm-playground-retrieval) — 검색 엔진: BM25(Kiwi) · Dense(Qdrant) · 하이브리드 · 리랭커 · 저장소 · 인제스트 흐름 · ANN 지표 (2026-10-23 이 레포에서 분리)
 - [llm-playground-corpus](https://github.com/calm-sea-psy/llm-playground-corpus) — 문서 · 청크 타입, 토크나이저, 청커, 임베딩, parquet 입출력
 - [llm-playground-llm](https://github.com/calm-sea-psy/llm-playground-llm) — 평가 지표 · KorQuAD 매칭(`playground_evalkit`), LLM 클라이언트(예정)
 
@@ -11,11 +12,12 @@
 
 - [uv](https://docs.astral.sh/uv/) (Python 3.13은 `.python-version`으로 고정)
 - Docker (PostgreSQL + Qdrant)
-- 모듈은 git 태그로 설치됩니다 (CORPUS `v0.1.0`, evalkit `evalkit-v0.1.0`). 모듈을 함께 고칠 때만 같은 부모 폴더에 나란히 clone 하고 `pyproject.toml` 의 source 를 path 로 바꿉니다
+- 모듈은 git 태그로 설치됩니다 (retrieval `v0.1.0`, corpus `v0.1.0`, evalkit `evalkit-v0.1.0`). 모듈을 함께 고칠 때만 같은 부모 폴더에 나란히 clone 하고 `pyproject.toml` 의 source 를 path 로 바꿉니다
 
 ```
 작업 폴더/
-├── llm-playground-rag/
+├── llm-playground-wiki/
+├── llm-playground-retrieval/
 ├── llm-playground-corpus/
 └── llm-playground-llm/
 ```
@@ -46,7 +48,7 @@ uv run ruff check
 # BM25 색인을 한 번 만들어 저장 (전체 규모는 수십 분)
 uv run python scripts/build_bm25.py --collection kowiki-subset-10000_kure-v1
 # 컬렉션 기본값은 configs/ingest.yaml 의 store.collection ({source}_{model}). 서브셋은 직접 지정
-RAG_COLLECTION=kowiki-subset-10000_kure-v1 uv run uvicorn playground_rag.api.app:create_app --factory --host 127.0.0.1 --port 8000
+RAG_COLLECTION=kowiki-subset-10000_kure-v1 uv run uvicorn playground_wiki.api.app:create_app --factory --host 127.0.0.1 --port 8000
 ```
 
 - `POST /search` — `{"query": "조선의 수도는?", "k": 5, "doc_ids": [], "categories": []}` → 청크 · 리랭커 점수(0~1)
@@ -57,22 +59,18 @@ RAG_COLLECTION=kowiki-subset-10000_kure-v1 uv run uvicorn playground_rag.api.app
 
 ```bash
 uv run --env-file .env.cloud python scripts/ingest.py --parsed data/parsed/kowiki-subset-10000
-RAG_COLLECTION=kowiki-subset-10000_kure-v1 uv run --env-file .env.cloud uvicorn playground_rag.api.app:create_app --factory --port 8000
+RAG_COLLECTION=kowiki-subset-10000_kure-v1 uv run --env-file .env.cloud uvicorn playground_wiki.api.app:create_app --factory --port 8000
 ```
 
 ## 구조
 
 ```
 configs/                 인제스트 · 검색 · LLM 설정
-src/playground_rag/
-  core/                  Hit · Filters 자료형, Source · Retriever 계약
+src/playground_wiki/
   sources/               WikiSource (덤프 스트리밍 파싱)
   ingest/                WikiCleaner (위키 마크업 정제)
-  store/                 PostgreSQL (문서 · 청크 원문) · Qdrant (벡터)
-  retrieval/             BM25 · Dense · Hybrid(RRF) · Reranker · FAISS 색인, 검색 서비스
-  eval/                  ANN 벤치 지표
-  api/                   FastAPI — /search · /health
-scripts/                 덤프 다운로드, 인제스트 · 평가 스크립트
+  api/                   FastAPI — /search · /health (검색 엔진은 playground_retrieval)
+scripts/                 덤프 다운로드 · 파싱 · 인제스트 · BM25 색인 · 평가 · ANN 벤치
 tests/
 data/                    덤프 · 파싱 결과 · 임베딩 (git 제외)
 ```

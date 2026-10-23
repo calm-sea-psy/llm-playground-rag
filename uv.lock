@@ -772,18 +772,35 @@ version = "0.1.0"
 source = { git = "https://github.com/calm-sea-psy/llm-playground-llm?subdirectory=packages%2Fevalkit&tag=evalkit-v0.1.0#c25e10080a0babb8b2ed0de7ea5e6505f90eae7e" }
 
 [[package]]
-name = "playground-rag"
+name = "playground-retrieval"
+version = "0.1.0"
+source = { git = "https://github.com/calm-sea-psy/llm-playground-retrieval?tag=v0.1.0#3571f1e95665aaa1c1d6b29fa17cc8c171b4c029" }
+dependencies = [
+    { name = "faiss-cpu" },
+    { name = "kiwipiepy" },
+    { name = "numpy" },
+    { name = "playground-corpus" },
+    { name = "psycopg", extra = ["binary"] },
+    { name = "qdrant-client" },
+]
+
+[package.optional-dependencies]
+rerank = [
+    { name = "playground-corpus", extra = ["local"] },
+]
+
+[[package]]
+name = "playground-wiki"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "faiss-cpu" },
     { name = "fastapi" },
-    { name = "kiwipiepy" },
     { name = "lxml" },
     { name = "mwparserfromhell" },
     { name = "playground-corpus", extra = ["local", "parquet"] },
     { name = "playground-evalkit" },
-    { name = "psycopg", extra = ["binary"] },
+    { name = "playground-retrieval", extra = ["rerank"] },
     { name = "pyyaml" },
     { name = "qdrant-client" },
     { name = "torch" },
@@ -801,12 +818,11 @@ dev = [
 requires-dist = [
     { name = "faiss-cpu", specifier = ">=1.15.1" },
     { name = "fastapi", specifier = ">=0.159.1" },
-    { name = "kiwipiepy", specifier = ">=0.24.1" },
     { name = "lxml", specifier = ">=6.1.3" },
     { name = "mwparserfromhell", specifier = ">=0.7.2" },
     { name = "playground-corpus", extras = ["parquet", "local"], git = "https://github.com/calm-sea-psy/llm-playground-corpus?tag=v0.1.0" },
     { name = "playground-evalkit", git = "https://github.com/calm-sea-psy/llm-playground-llm?subdirectory=packages%2Fevalkit&tag=evalkit-v0.1.0" },
-    { name = "psycopg", extras = ["binary"], specifier = ">=3.3.6" },
+    { name = "playground-retrieval", extras = ["rerank"], git = "https://github.com/calm-sea-psy/llm-playground-retrieval?tag=v0.1.0" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "qdrant-client", specifier = ">=1.19.1" },
     { name = "torch", specifier = ">=2.11.0", index = "https://download.pytorch.org/whl/cu128" },

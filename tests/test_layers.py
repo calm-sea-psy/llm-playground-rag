@@ -1,9 +1,7 @@
-"""하위 패키지 사이 의존 방향 검사. 나중에 라이브러리(core · store · retrieval · eval)를 모듈 레포로 뗄 때
-폴더만 옮기면 되도록, 라이브러리 쪽이 제품 쪽(api · sources · ingest)과 설정 · 웹 의존을 가져오지 못하게 막는다.
+"""하위 패키지 사이 의존 방향 검사. 검색 엔진은 playground_retrieval 모듈이고, 이 레포는 위키 제품 쪽만 갖는다.
 
-    core ← store · retrieval · eval   (라이브러리)
-    core ← ingest ← sources            (위키 전용)
-    전부 ← api                          (제품)
+ingest ← sources      (위키 덤프 정제 · 파싱)
+전부 ← api             (제품 API)
 """
 
 import ast
@@ -11,28 +9,27 @@ from pathlib import Path
 
 import pytest
 
-PACKAGE = "playground_rag"
+PACKAGE = "playground_wiki"
 SRC = Path(__file__).parents[1] / "src" / PACKAGE
 
-# 하위 패키지 → 가져와도 되는 다른 하위 패키지
+# 하위 패키지 → 가져와도 되는 다른 하위 패키지 (playground_retrieval 은 api 에서 쓴다)
 ALLOWED_INTERNAL = {
-    "core": set(),
-    "store": {"core"},
-    "retrieval": {"core"},  # 저장소는 Protocol 로 받는다 — store 구현을 직접 가져오지 않는다
-    "eval": {"core"},
-    "ingest": {"core"},
-    "sources": {"core", "ingest"},
-    "api": {"core", "store", "retrieval", "eval", "ingest", "sources"},
+    "ingest": set(),
+    "sources": {"ingest"},
+    "api": {"ingest", "sources"},
 }
-LIBRARY = ("core", "store", "retrieval", "eval")
-# 라이브러리 쪽에서 쓰면 안 되는 외부 패키지: 웹 · 설정 파일은 제품 쪽 일, DB 클라이언트는 store 만
 # 어디서도 쓰면 안 되는 외부 패키지. api/** 는 pydantic 때문에 ruff TID251 을 꺼 두어 ruff 로는 못 잡는다
-BANNED_EVERYWHERE = frozenset({"ollama", "openai"})  # LLM 은 playground_llm 으로만 부른다
+BANNED_EVERYWHERE = frozenset(
+    {
+        "ollama",
+        "openai",
+        "playground_rag",
+    }  # LLM 은 playground_llm 으로만, playground_rag 는 옛 이름
+)
+# 하위 패키지별로 더 막는 것: 정제 · 파싱은 웹 · 저장소 · 검색을 모른다
 BANNED_EXTERNAL = {
-    "core": {"fastapi", "pydantic", "yaml", "psycopg", "qdrant_client", "faiss", "torch"},
-    "store": {"fastapi", "pydantic", "yaml"},
-    "retrieval": {"fastapi", "pydantic", "yaml", "psycopg", "qdrant_client"},
-    "eval": {"fastapi", "pydantic", "yaml", "psycopg", "qdrant_client"},
+    "ingest": {"fastapi", "pydantic", "psycopg", "qdrant_client", "playground_retrieval"},
+    "sources": {"fastapi", "pydantic", "psycopg", "qdrant_client", "playground_retrieval"},
 }
 
 
@@ -73,26 +70,19 @@ def test_subpackage_imports_follow_layers(package: str):
     assert _violations(package) == []
 
 
-def test_library_does_not_import_product_side():
-    product = set(ALLOWED_INTERNAL) - set(LIBRARY)
-
-    for package in LIBRARY:
-        assert not ALLOWED_INTERNAL[package] & product, package
-
-
 def test_checker_catches_imports_inside_functions(tmp_path: Path):
-    (tmp_path / "retrieval").mkdir()
-    (tmp_path / "retrieval" / "bad.py").write_text(
-        "from playground_rag.core import Hit\n"
+    (tmp_path / "sources").mkdir()
+    (tmp_path / "sources" / "bad.py").write_text(
+        "from playground_wiki.ingest import WikiCleaner\n"
         "def f():\n"
-        "    from playground_rag.api import app\n"
-        "    import yaml\n",
+        "    from playground_wiki.api import app\n"
+        "    import psycopg\n",
         encoding="utf-8",
     )
 
-    assert _violations("retrieval", tmp_path) == [
-        ("retrieval/bad.py", 3, "playground_rag.api"),
-        ("retrieval/bad.py", 4, "yaml"),
+    assert _violations("sources", tmp_path) == [
+        ("sources/bad.py", 3, "playground_wiki.api"),
+        ("sources/bad.py", 4, "psycopg"),
     ]
 
 

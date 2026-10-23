@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from playground_rag.sources import Redirect, Skipped, WikiSource
+from playground_wiki.sources import Redirect, Skipped, WikiSource
 
 _NS = "http://www.mediawiki.org/xml/export-0.11/"
 _LONG_TEXT = "서울특별시는 대한민국의 수도이다. " * 20

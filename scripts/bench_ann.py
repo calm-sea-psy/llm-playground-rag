@@ -45,11 +45,10 @@ from playground_evalkit import (
     mrr,
     render_table,
 )
+from playground_retrieval.eval import latency_summary, recall_at_k, recall_qps_svg
+from playground_retrieval.search import FaissIndex
+from playground_retrieval.store import PgConfig, PgStore, QdrantStore
 from qdrant_client import models
-
-from playground_rag.eval import latency_summary, recall_at_k, recall_qps_svg
-from playground_rag.retrieval import FaissIndex
-from playground_rag.store import PgConfig, PgStore, QdrantStore
 
 SUBSET = Path("data/parsed/kowiki-subset-10000")
 SOURCE = "kowiki"

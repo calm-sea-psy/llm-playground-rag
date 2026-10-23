@@ -3,8 +3,7 @@
 from typing import Annotated
 
 from fastapi import Depends, Request
-
-from playground_rag.retrieval import SearchService
+from playground_retrieval.search import SearchService
 
 
 def get_search_service(request: Request) -> SearchService:

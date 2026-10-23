@@ -19,8 +19,8 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import yaml
 
-from playground_rag.sources import WikiSource
-from playground_rag.sources.wiki import REDIRECT_MARKERS
+from playground_wiki.sources import WikiSource
+from playground_wiki.sources.wiki import REDIRECT_MARKERS
 
 SAMPLE_DIR = Path("data/sample")
 STRIDE = 38  # 넘겨주기 뺀 본문 문서 약 76만 / 38 ≈ 2만

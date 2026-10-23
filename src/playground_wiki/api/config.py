@@ -6,9 +6,8 @@ from pathlib import Path
 from typing import Self
 
 import yaml
-
-from playground_rag.retrieval import SearchSettings
-from playground_rag.store import PgConfig
+from playground_retrieval.search import SearchSettings
+from playground_retrieval.store import PgConfig
 
 CONFIG_DIR = Path("configs")  # 레포 루트에서 실행할 때. RAG_CONFIG_DIR 로 바꾼다
 BM25_INDEX_DIR = Path("data/index/bm25")  # scripts/build_bm25.py 가 {컬렉션} 폴더로 저장한다

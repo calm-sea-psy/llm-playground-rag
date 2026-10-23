@@ -39,9 +39,8 @@ from playground_evalkit import (
     render_table,
     write_records,
 )
-
-from playground_rag.core import Retriever
-from playground_rag.retrieval import (
+from playground_retrieval.core import Retriever
+from playground_retrieval.search import (
     Bm25Index,
     Bm25Retriever,
     CrossEncoderScorer,
@@ -50,7 +49,7 @@ from playground_rag.retrieval import (
     KiwiAnalyzer,
     Reranker,
 )
-from playground_rag.store import PgConfig, PgStore, QdrantStore
+from playground_retrieval.store import PgConfig, PgStore, QdrantStore
 
 SUBSET = Path("data/parsed/kowiki-subset-10000")
 BM25_INDEX_DIR = Path("data/index/bm25")  # scripts/build_bm25.py 가 저장하는 곳

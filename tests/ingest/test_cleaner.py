@@ -1,5 +1,5 @@
-from playground_rag.ingest import WikiCleaner
-from playground_rag.ingest.cleaner import clean_text
+from playground_wiki.ingest import WikiCleaner
+from playground_wiki.ingest.cleaner import clean_text
 
 
 def _clean(wikitext: str):

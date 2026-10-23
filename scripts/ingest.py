@@ -1,5 +1,6 @@
-"""파싱한 문서를 청킹 · 임베딩해 PostgreSQL(원문) · Qdrant(벡터)에 넣는다.
+"""파싱한 위키 문서를 청킹 · 임베딩해 PostgreSQL(원문) · Qdrant(벡터)에 넣는다.
 
+설정(configs/ingest.yaml)을 읽어 playground_retrieval 의 ingest_documents 를 부른다.
 순서: 문서 → PG documents → 청킹 → PG chunks → 임베딩(npy 캐시, 다시 계산 안 함) → Qdrant → 실행 기록.
 같은 키로 다시 넣으면 덮어쓰므로 중단된 뒤 다시 돌려도 된다.
 
@@ -9,7 +10,7 @@
 """
 
 import argparse
-import time
+import logging
 from pathlib import Path
 
 import yaml
@@ -22,14 +23,14 @@ from playground_corpus import (
     SentenceTransformerEmbedder,
     read_documents,
 )
-
-from playground_rag.store import PgConfig, PgStore, QdrantStore
+from playground_retrieval.ingest import ingest_documents
+from playground_retrieval.store import PgConfig, PgStore, QdrantStore
 
 
 def main() -> None:
     args = _parse_args()
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
     config = yaml.safe_load(args.config.read_text(encoding="utf-8"))
-    source = config["source"]["name"]
     chunking = config["chunking"]
     spec = EMBEDDING_MODELS[args.model or config["embedding"]["model"]]
     collection = args.collection or config["store"]["collection"].format(
@@ -57,36 +58,29 @@ def main() -> None:
     print(
         f"collection={collection} documents={len(documents):,} model={spec.name} max_tokens={max_tokens}"
     )
-
+    embedder = SentenceTransformerEmbedder.load(
+        spec, fp16=config["embedding"]["fp16"], batch_size=config["embedding"]["batch_size"]
+    )
+    cache = EmbeddingCache(
+        Path(config["embedding"]["output_dir"]) / spec.name / f"{collection}-{max_tokens}"
+    )
     with PgStore.connect(PgConfig.from_env()) as pg:
-        pg.create_schema()
-        run_id = pg.start_run(source, collection, spec.name, max_tokens)
-        pg.upsert_documents(source, documents)
-        start = time.perf_counter()
-        chunks = [chunk for doc in documents for chunk in chunker.chunk(doc)]
-        print(f"chunks={len(chunks):,} ({time.perf_counter() - start:.0f}s)")
-        pg.upsert_chunks(collection, chunks)
-
-        cache = EmbeddingCache(
-            Path(config["embedding"]["output_dir"]) / spec.name / f"{collection}-{max_tokens}"
+        result = ingest_documents(
+            documents,
+            source=config["source"]["name"],
+            collection=collection,
+            chunker=chunker,
+            embedder=embedder,
+            cache=cache,
+            pg=pg,
+            qdrant=QdrantStore.from_env(),
+            dump_date=str(config["source"]["dump_date"]),
+            on_disk=config["store"]["qdrant"]["on_disk"],
         )
-        start = time.perf_counter()
-        embedder = SentenceTransformerEmbedder.load(
-            spec, fp16=config["embedding"]["fp16"], batch_size=config["embedding"]["batch_size"]
-        )
-        cache.write(embedder, [chunk.id for chunk in chunks], [chunk.text for chunk in chunks])
-        ids, vectors = cache.load()
-        print(f"embedded {len(ids):,} ({time.perf_counter() - start:.0f}s)")
-
-        qdrant = QdrantStore.from_env()
-        qdrant.ensure_collection(
-            collection, dim=spec.dim, on_disk=config["store"]["qdrant"]["on_disk"]
-        )
-        categories = {doc.id: doc.categories for doc in documents}
-        dump_date = config["source"]["dump_date"]
-        qdrant.upsert(collection, chunks, vectors, categories, dump_date=str(dump_date))
-        pg.finish_run(run_id, doc_count=len(documents), chunk_count=len(chunks))
-        print(f"done: run_id={run_id} qdrant points={qdrant.count(collection):,}")
+    print(
+        f"done: run_id={result.run_id} chunks={result.chunks:,} ({result.chunk_sec:.0f}s) "
+        f"embedded ({result.embed_sec:.0f}s) qdrant points={result.points:,}"
+    )
 
 
 def _parse_args() -> argparse.Namespace:

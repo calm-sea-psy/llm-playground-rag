@@ -4,12 +4,12 @@ import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 from playground_corpus import Chunk
+from playground_retrieval.core import Filters, Hit
+from playground_retrieval.search import SearchService
 
-from playground_rag.api.app import create_app
-from playground_rag.api.config import ApiConfig
-from playground_rag.api.schemas import MAX_K, MAX_QUERY_CHARS
-from playground_rag.core import Filters, Hit
-from playground_rag.retrieval import SearchService
+from playground_wiki.api.app import create_app
+from playground_wiki.api.config import ApiConfig
+from playground_wiki.api.schemas import MAX_K, MAX_QUERY_CHARS
 
 CHUNK = Chunk(
     id="1-2",

@@ -22,7 +22,7 @@ import pyarrow.parquet as pq
 import yaml
 from playground_corpus import Document, write_documents
 
-from playground_rag.sources import Redirect, Skipped, WikiSource
+from playground_wiki.sources import Redirect, Skipped, WikiSource
 
 SHARD_SIZE = 50_000  # 문서 평균 4KB 기준 샤드 하나 약 200MB 메모리 · 수십 MB 파일
 PROGRESS_EVERY = 50_000

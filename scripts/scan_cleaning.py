@@ -20,8 +20,8 @@ import mwparserfromhell
 import pyarrow.parquet as pq
 from playground_corpus import Document
 
-from playground_rag.ingest import WikiCleaner
-from playground_rag.sources import RawPage, parse_page
+from playground_wiki.ingest import WikiCleaner
+from playground_wiki.sources import RawPage, parse_page
 
 SAMPLE_DIR = Path("data/sample")
 MIN_CHARS = 200  # WikiSource 기본값과 같게

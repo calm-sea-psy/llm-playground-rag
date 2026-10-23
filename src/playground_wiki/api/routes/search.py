@@ -2,8 +2,8 @@
 
 from fastapi import APIRouter
 
-from playground_rag.api.deps import SearchServiceDep
-from playground_rag.api.schemas import HealthResponse, SearchRequest, SearchResponse
+from playground_wiki.api.deps import SearchServiceDep
+from playground_wiki.api.schemas import HealthResponse, SearchRequest, SearchResponse
 
 router = APIRouter()
 

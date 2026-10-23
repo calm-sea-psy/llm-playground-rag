@@ -16,12 +16,12 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
-from playground_rag.retrieval import Bm25Index, KiwiAnalyzer
-from playground_rag.retrieval.analyzer import KEEP_TAGS
-from playground_rag.retrieval.bm25 import K1, B
-from playground_rag.store import PgConfig, PgStore
+from playground_retrieval.search import Bm25Index, KiwiAnalyzer
+from playground_retrieval.search.analyzer import KEEP_TAGS
+from playground_retrieval.search.bm25 import K1, B
+from playground_retrieval.store import PgConfig, PgStore
 
-INDEX_DIR = Path("data/index/bm25")  # src/playground_rag/api/config.py 의 BM25_INDEX_DIR 와 같다
+INDEX_DIR = Path("data/index/bm25")  # src/playground_wiki/api/config.py 의 BM25_INDEX_DIR 와 같다
 SOURCE = "kowiki"
 
 

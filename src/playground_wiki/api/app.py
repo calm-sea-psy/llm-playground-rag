@@ -1,7 +1,7 @@
 """FastAPI 앱 조립: 시작할 때 저장소에 접속하고 검색 서비스를 만든다.
 
 실행:
-  uv run uvicorn playground_rag.api.app:create_app --factory --host 127.0.0.1 --port 8000
+  uv run uvicorn playground_wiki.api.app:create_app --factory --host 127.0.0.1 --port 8000
 """
 
 import logging
@@ -9,11 +9,11 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from playground_retrieval.search import SearchService
+from playground_retrieval.store import PgStore, QdrantStore
 
-from playground_rag.api.config import ApiConfig
-from playground_rag.api.routes import search
-from playground_rag.retrieval import SearchService
-from playground_rag.store import PgStore, QdrantStore
+from playground_wiki.api.config import ApiConfig
+from playground_wiki.api.routes import search
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +30,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 def create_app() -> FastAPI:
     """라우터를 붙인 앱. lifespan 은 서버가 시작할 때 돈다 (TestClient 를 with 없이 쓰면 돌지 않는다)."""
-    app = FastAPI(title="llm-playground-rag", lifespan=lifespan)
+    app = FastAPI(title="llm-playground-wiki", lifespan=lifespan)
     app.include_router(search.router)
     return app

@@ -15,9 +15,11 @@ extend-select = ["NPY"]
 # LLM 호출은 playground_llm 만 쓴다 (서버를 바꿔도 이 레포 코드가 그대로이게). 서버 클라이언트를 직접 import 하지 않는다
 "ollama".msg = "LLM 은 playground_llm (OllamaLLM · LLM Protocol) 으로 부른다."
 "openai".msg = "LLM 은 playground_llm (LLM Protocol 구현체) 으로 부른다."
+# 검색 엔진은 llm-playground-retrieval 로 분리했다 (2026-10-23)
+"playground_rag".msg = "옛 패키지 이름. 검색 엔진은 playground_retrieval, 위키 제품은 playground_wiki."
 
 [lint.isort]
-known-first-party = ["playground_rag"]
+known-first-party = ["playground_wiki"]
 
 [lint.extend-per-file-ignores]
 # 디렉터리 패턴은 이 파일(프로젝트 루트) 기준.
@@ -29,7 +31,3 @@ known-first-party = ["playground_rag"]
 # 경계 모듈: pydantic(TID251) · Any(ANN401) 허용
 "**/api/**/*.py"         = ["TID251", "ANN401"]   # 라우터 · 요청/응답 모델
 "**/agent/state.py"      = ["TID251", "ANN401"]   # LangGraph 상태
-
-# 수치 계산: 논문 표기 변수명(N803/N806) · 계산식 안 숫자 리터럴(PLR2004) 허용
-"metrics.py"   = ["N803", "N806", "PLR2004"]
-"ann_bench.py" = ["N803", "N806", "PLR2004"]
