@@ -21,3 +21,13 @@ class Filters:
     doc_ids: frozenset[str] = frozenset()
     categories: frozenset[str] = frozenset()
     """이 중 하나라도 속한 문서만."""
+
+
+@dataclass(frozen=True)
+class VectorHit:
+    """벡터 색인(Qdrant · FAISS)의 검색 결과 한 건. 원문은 아직 붙지 않은 상태."""
+
+    chunk_id: str
+    doc_id: str
+    score: float
+    """코사인 유사도."""

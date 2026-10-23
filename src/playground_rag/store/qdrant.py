@@ -12,6 +12,8 @@ from numpy.typing import NDArray
 from playground_corpus import Chunk
 from qdrant_client import QdrantClient, models
 
+from playground_rag.core import VectorHit
+
 URL = "http://localhost:6333"
 UPSERT_BATCH = 512  # 요청 하나에 1024d 벡터 512개 ≈ 2MB
 _POINT_NAMESPACE = uuid.UUID(
@@ -55,16 +57,6 @@ class IndexStatus:
     points: int
     indexed: int
     """HNSW 색인에 들어간 벡터 수. points 보다 적으면 나머지는 전수 비교로 찾는다."""
-
-
-@dataclass(frozen=True)
-class VectorHit:
-    """벡터 검색 결과 한 건."""
-
-    chunk_id: str
-    doc_id: str
-    score: float
-    """코사인 유사도."""
 
 
 def point_id(chunk_id: str) -> str:

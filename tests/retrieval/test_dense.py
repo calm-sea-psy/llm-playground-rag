@@ -11,9 +11,9 @@ from playground_corpus import Chunk, Document, EmbeddingModelSpec, Section
 from qdrant_client import QdrantClient
 from qdrant_client.http.exceptions import ResponseHandlingException
 
-from playground_rag.core import Filters
+from playground_rag.core import Filters, VectorHit
 from playground_rag.retrieval import DenseRetriever
-from playground_rag.store import PgConfig, PgStore, QdrantStore, VectorHit
+from playground_rag.store import PgConfig, PgStore, QdrantStore
 from playground_rag.store.qdrant import URL as QDRANT_URL
 
 _SPEC = EmbeddingModelSpec(name="fake", model_id="test/fake", dim=3, max_seq_length=16)

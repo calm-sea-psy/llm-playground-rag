@@ -8,7 +8,7 @@ import faiss
 import numpy as np
 from numpy.typing import NDArray
 
-from playground_rag.store import VectorHit
+from playground_rag.core import VectorHit
 
 FLAT = "Flat"  # 전수 비교 — ANN 벤치의 정답
 # 필터가 남긴 행이 이보다 적으면 그 행만 전수 비교한다 (Qdrant full_scan_threshold 와 같은 방식).

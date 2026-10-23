@@ -8,8 +8,7 @@ import numpy as np
 from numpy.typing import NDArray
 from playground_corpus import Chunk, Embedder
 
-from playground_rag.core import Filters, Hit
-from playground_rag.store import VectorHit
+from playground_rag.core import Filters, Hit, VectorHit
 
 logger = logging.getLogger(__name__)
 

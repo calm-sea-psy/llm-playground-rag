@@ -5,7 +5,6 @@ from playground_rag.store.qdrant import (
     IndexStatus,
     QdrantConfig,
     QdrantStore,
-    VectorHit,
     chunk_payload,
     point_id,
 )
@@ -16,7 +15,6 @@ __all__ = [
     "PgStore",
     "QdrantConfig",
     "QdrantStore",
-    "VectorHit",
     "chunk_payload",
     "point_id",
 ]
