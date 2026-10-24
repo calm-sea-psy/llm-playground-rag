@@ -69,9 +69,12 @@ CANDIDATES_PATH = Path("data/bench/longtail-candidates-v1.jsonl")
 WIKIDATA = Path("data/bench/wikidata")
 ENTITIES_PATH = WIKIDATA / "entities.jsonl"
 VALUES_PATH = WIKIDATA / "values.jsonl"
-QUESTIONS_PATH = Path("data/bench/longtail-questions-v1.jsonl")
-SEARCH_PATH = Path("data/bench/longtail-search-v1.jsonl")
-LABELED_PATH = Path("data/bench/longtail-labeled-v1.jsonl")
+# v2: 사람 검수(2026-10-24, 50개) 뒤 질문 표현 · 판정 규칙을 고쳤다 — 질문 문장이 그대로인 문항은 v1 검색 결과를 옮겨 쓴다
+QUESTIONS_PATH = Path("data/bench/longtail-questions-v2.jsonl")
+SEARCH_PATH = Path("data/bench/longtail-search-v2.jsonl")
+LABELED_PATH = Path("data/bench/longtail-labeled-v2.jsonl")
+PREVIOUS_QUESTIONS = Path("data/bench/longtail-questions-v1.jsonl")
+PREVIOUS_SEARCH = Path("data/bench/longtail-search-v1.jsonl")
 SEED = 0
 LONGTAIL_MAX = 2  # 코퍼스 문서 역링크 하위 약 25% (p25 = 2, 2026-10-24 집계)
 CANDIDATES = 6000  # 1단계 롱테일 100 · B 100 + 2단계 +300 · +200 이 라벨 뒤에 남을 만큼 (수율은 파일럿으로 확인)
@@ -83,7 +86,8 @@ REQUEST_INTERVAL = 1.0  # Wikimedia API 규칙 — 요청은 하나씩, 간격�
 MAX_RETRIES = 5
 PILOT_PER_LABEL = 10
 OUT_DIR = Path("../llm-playground-llm/bench/data")
-SET_RULES = "v1"  # 고르는 규칙(크기 · 돌아가며 고르기 · 주제당 하나)을 바꾸면 올린다 — 세트 이름 해시에 들어간다
+# 고르는 규칙 · 질문 · 판정 규칙을 바꾸면 올린다 — 세트 이름 해시에 들어간다. v2: 사람 검수 반영
+SET_RULES = "v2"
 # 판정 라벨 → (세트 kind, 1단계 문항 수). 롱테일 답 있음은 KorQuAD 300 과 합치지 않고 따로 보고한다
 STAGE1 = {
     "answerable": ("longtail", 100),
@@ -224,6 +228,8 @@ def questions() -> None:
 
 def search() -> None:
     rows = _read_jsonl(QUESTIONS_PATH)
+    if carried := _carry_over_previous_search(rows):
+        print(f"질문 문장이 그대로인 {carried:,}개는 이전 검색 결과를 옮겼다", flush=True)
     done = {row["id"] for row in _read_jsonl_if(SEARCH_PATH)}
     todo = [row for row in rows if row["id"] not in done]
     config = ApiConfig.from_env()
@@ -233,6 +239,21 @@ def search() -> None:
         print(f"검색 준비 {time.perf_counter() - start:.0f}s · 남은 {len(todo):,}", flush=True)
         asyncio.run(_search_all(service, todo))
     print(f"저장: {SEARCH_PATH} ({time.perf_counter() - start:.0f}s)")
+
+
+def _carry_over_previous_search(rows: Sequence[dict]) -> int:
+    """이전 판의 검색 결과 중 질문 문장이 그대로인 것을 새 판으로 옮긴다 (처음 한 번만). 옮긴 수."""
+    if SEARCH_PATH.exists() or not PREVIOUS_SEARCH.exists():
+        return 0
+    old = {row["id"]: row["question"] for row in _read_jsonl(PREVIOUS_QUESTIONS)}
+    new = {row["id"]: row["question"] for row in rows}
+    kept = [
+        {**row, "question": new[row["id"]]}
+        for row in _read_jsonl(PREVIOUS_SEARCH)
+        if row["id"] in new and old.get(row["id"]) == new[row["id"]]
+    ]
+    _write_jsonl(SEARCH_PATH, kept)
+    return len(kept)
 
 
 async def _search_all(service: SearchService, rows: Sequence[dict]) -> None:
@@ -249,7 +270,7 @@ async def _search_all(service: SearchService, rows: Sequence[dict]) -> None:
             }
             for hit in result.hits
         ]
-        _append_jsonl(SEARCH_PATH, {"id": row["id"], "hits": hits})
+        _append_jsonl(SEARCH_PATH, {"id": row["id"], "question": row["question"], "hits": hits})
         if index % 200 == 0:
             print(f"  {index:,}/{len(rows):,}", flush=True)
 
@@ -273,7 +294,12 @@ def label() -> None:
             )
         else:
             fact = Fact(
-                row["qid"], row["subject"], row["pid"], tuple(row["answers"]), row["strict"]
+                row["qid"],
+                row["subject"],
+                row["pid"],
+                tuple(row["answers"]),
+                row["strict"],
+                year_only=row.get("year_only", False),
             )
             question = FactQuestion(row["id"], row["question"], fact, templates[row["pid"]])
             found = label_fact(question, hits)
@@ -350,6 +376,13 @@ def build(out_dir: Path) -> None:
         "by_property": by_property,
         "note": "Wikidata 템플릿 질문 — KorQuAD 자연 질문보다 쉽다. 라벨 노이즈는 50개 사람 검수로 잰다. "
         "남은 문항(같은 주제 제외)은 2단계 결선 몫",
+        # v1(f4-longtail-170f9cf4) 사람 검수 — v2 규칙은 여기서 나온 오류 꼴을 고쳤다. v2 노이즈는 다시 재야 안다
+        "review_v1": {
+            "file": "data/bench/longtail-v1-review-checked.md (위키 레포, 로컬)",
+            "answerable_wrong": "4/25 (직위 · 승격일 · 다른 회사 설립 · 후궁)",
+            "no_fact_wrong": "3/25 (도입부 괄호 연도 2 · 무슬림)",
+            "unnatural_question": "7/50 (괄호 수식어 · 조사 · 본부 · 자식 · 믿은)",
+        },
     }
     (path.parent / "meta.json").write_text(
         json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
@@ -394,6 +427,12 @@ def _round_robin(
 
 
 def _set_item(kind: str, row: dict) -> dict:
+    subject = normalize_title(row["subject"])
+    # 청크 id 는 "{문서 id}-{순번}" — 순번 0 이 도입부. 목록 청크만 검색된 사실 없음은 검색 누락에 가깝다 (사람 검수 26 · 28번)
+    lead = any(
+        normalize_title(hit["title"]) == subject and hit["chunk_id"].endswith("-0")
+        for hit in row["hits"]
+    )
     return {
         "id": f"{kind}:{row['id']}",
         "kind": kind,
@@ -416,6 +455,7 @@ def _set_item(kind: str, row: dict) -> dict:
             "answer_shape": row.get("shape", "other"),
             "property": _stratum(row),
             "answer_rank": row["rank"] if kind == "longtail" else None,
+            "subject_lead_in_context": lead,
         },
     }
 
@@ -451,6 +491,7 @@ def _question_row(question: FactQuestion, backlinks: int) -> dict:
         "question": question.question,
         "answers": list(fact.answers),
         "strict": fact.strict,
+        "year_only": fact.year_only,
         "shape": template.shape,
         "backlinks": backlinks,
     }

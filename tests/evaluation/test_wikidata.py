@@ -129,6 +129,51 @@ def _question(pid: str, answers: tuple[str, ...], *, strict: bool):
     return fact_question(Fact("Q1", "홍길동", pid, answers, strict))
 
 
+def test_question_drops_title_qualifier_and_picks_josa_from_the_name():
+    question = fact_question(
+        Fact("Q7", "이민진 (뮤지컬 배우)", "P569", ("1997년 6월 25일",), False)
+    )
+
+    assert question.question.startswith("이민진")
+    assert "(" not in question.question
+    assert render("{주제}{이} 태어난 날짜는?", "이민진") == "이민진이 태어난 날짜는?"
+
+
+def test_year_only_date_is_asked_with_the_first_phrase():
+    fact = Fact("Q8", "성정모", "P569", ("1957년",), True, year_only=True)
+
+    assert (
+        fact_question(fact).question == "성정모는 언제 태어났나?"
+    )  # "생년월일은?"에 연도만 답하지 않게
+
+
+def test_label_answerable_rejects_value_in_a_sentence_with_another_meaning():
+    station = _question("P571", ("1899년 1월 1일",), strict=True)
+    school = _question("P69", ("연세대학교",), strict=True)
+    spouse = _question("P26", ("고요제이 천황",), strict=True)
+
+    promoted = [("홍길동", "1899년 1월 1일 - 보통역으로 승격하면서 역을 지금의 위치로 옮겼다.")]
+    dean = [("홍길동", "홍길동은 연세대학교 의과대학장을 역임했다.")]
+    graduated = [("홍길동", "홍길동은 연세대학교를 졸업했다.")]
+    concubine = [("홍길동", "고요제이 천황의 텐지이다.")]
+
+    assert label_fact(station, promoted).label == "dropped"  # 승격일이지 처음 연 날이 아니다
+    assert label_fact(school, dean).label == "dropped"  # 학장은 직위 — "대학" 낱말만으로는 안 된다
+    assert label_fact(school, graduated).label == "answerable"
+    assert label_fact(spouse, concubine).label == "dropped"
+
+
+def test_label_no_fact_sees_lead_year_parentheses_and_religion_words():
+    birth = _question("P569", ("1957년",), strict=True)
+    religion = _question("P140", ("이슬람교",), strict=True)
+
+    lead = [("홍길동", "홍길동(1957~ )은 브라질의 해방신학자이다.")]
+    muslim = [("홍길동", "홍길동은 무슬림이며 미시간주에 산다.")]
+
+    assert label_fact(birth, lead).reason == "other_date_in_subject"
+    assert label_fact(religion, muslim).reason == "property_mentioned"
+
+
 def test_label_answerable_needs_answer_in_subject_chunk():
     question = _question("P569", ("1950년 3월 2일",), strict=False)
 

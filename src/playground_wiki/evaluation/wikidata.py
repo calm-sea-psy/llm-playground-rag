@@ -28,7 +28,8 @@ _SENTENCE_END = re.compile(r"(?<=[.!?。])\s+|\n+")
 # 날짜 표기 ("1956년" · "1960년대" · "2020년 4월"). 날짜 속성의 답 없음 B 는 주제 문서 청크에 이것이 하나라도 있으면
 # 뺀다 — 위키데이터와 다른 날짜가 문서에 적혀 있으면(신성호 생년월일 1968 vs "1956년 3월 21일생") 모델이 문서대로 답해도
 # 지어냄으로 세게 된다 (2026-10-24 파일럿)
-_DATE = re.compile(r"\d{1,4}\s*년")
+# 도입부 괄호의 연도 "(1957~ )" · "(1477–1542)" 도 날짜로 센다 — "년"이 없어 놓쳤다 (2026-10-24 사람 검수 40 · 49번)
+_DATE = re.compile(r"\d{1,4}\s*년|\(\s*[^()]*?\d{3,4}\s*[~–\-]")
 # 행정 단위 꼬리. 장소 속성의 답 없음 B 는 꼬리를 뗀 이름이 주제 문맥에 있으면 뺀다 — "쿤두즈주"가 답인데
 # 문맥에 "쿤두즈시의 모스크"가 있으면 문맥에 답이 있는 셈이다 (2026-10-24 파일럿)
 _ADMIN_SUFFIX = re.compile(r"(특별자치시|특별자치도|특별시|광역시|시|주|군|구|도|현|성|읍|면)$")
@@ -48,25 +49,28 @@ class PropertyTemplate:
     questions: tuple[str, ...]
     """질문 표현 2~3개. `{주제}` 자리, 조사 자리는 `{은}` `{이}` `{을}` `{과}` — 주제의 받침으로 고른다."""
     synonyms: tuple[str, ...]
-    """문맥에 이 속성이 언급됐는지 볼 낱말 (답 있음의 같은 문장 조건 · 답 없음 B 의 "사실 없음" 검사)."""
+    """문맥에 이 속성이 언급됐는지 볼 낱말 — 답 없음 B 의 "사실 없음" 검사 (넓게 잡을수록 B 가 안전하다)."""
     shape: AnswerShape
     common_values: bool = False
-    """지명 · 국가 · 종교처럼 흔한 값 — 청크에 값만 있어도 다른 맥락일 수 있어 동의어와 같은 문장일 때만 답 있음."""
-    sentence_words: tuple[str, ...] = ()
-    """답 있음의 같은 문장 조건에만 더 쓰는 흔한 낱말("에 있는" 등). 답 없음 B 검사에는 쓰지 않는다 — 거의 모든 문장에 나온다."""
+    """지명 · 국가 · 종교처럼 흔한 값 — 답 없음 B 에서 행정 단위 꼬리를 뗀 이름까지 본다."""
+    answer_words: tuple[str, ...] = ()
+    """답 있음: 참값과 같은 문장에 있어야 하는 낱말. 비면 synonyms. 값이 문장에 있어도 다른 뜻일 수 있다 —
+    "원주의과대학장"(직위) · "보통역으로 승격"(다른 날짜) · "천황의 텐지"(후궁) (2026-10-24 사람 검수)."""
+    full_date_is_enough: bool = False
+    """일 단위까지 맞는 날짜면 같은 문장 조건 없이 답 있음 — 생몰일은 도입부 괄호 "(1997년 6월 25일 ~ )"에 낱말 없이 적힌다."""
 
 
 PROPERTIES: tuple[PropertyTemplate, ...] = (
     PropertyTemplate(
         "P569", "생년월일", "time", True,
         ("{주제}{은} 언제 태어났나?", "{주제}의 생년월일은?", "{주제}{이} 태어난 날짜는?"),
-        ("태어", "출생", "생년", "태생", "일생"), "date_number",
+        ("태어", "출생", "생년", "태생", "일생"), "date_number", full_date_is_enough=True,
     ),
     PropertyTemplate(
         "P570", "사망일", "time", True,
         ("{주제}{은} 언제 사망했나?", "{주제}의 사망일은?", "{주제}{이} 세상을 떠난 날짜는?"),
         ("사망", "별세", "타계", "숨지", "숨졌", "서거", "세상을 떠", "작고", "순직", "전사", "영면"),
-        "date_number",
+        "date_number", full_date_is_enough=True,
     ),
     PropertyTemplate(
         "P19", "출생지", "item", True,
@@ -86,7 +90,7 @@ PROPERTIES: tuple[PropertyTemplate, ...] = (
     ),
     PropertyTemplate(
         "P40", "자녀", "item", True,
-        ("{주제}의 자녀는 누구인가?", "{주제}의 자식 가운데 한 명은?"),
+        ("{주제}의 자녀는 누구인가?", "{주제}의 자녀 이름은?"),
         ("아들", "딸", "자녀", "자식", "슬하", "장남", "장녀", "차남", "외동", "소생", "후손"), "person",
     ),
     PropertyTemplate(
@@ -94,12 +98,14 @@ PROPERTIES: tuple[PropertyTemplate, ...] = (
         ("{주제}{은} 어느 학교를 졸업했나?", "{주제}의 출신 학교는?"),
         ("졸업", "학교", "대학", "입학", "학사", "석사", "박사", "수학", "재학", "학위", "전공", "학과", "학부", "유학"),
         "other",
+        answer_words=("졸업", "입학", "학사", "석사", "박사", "수학", "재학", "학위", "전공", "유학", "출신", "다녔"),
     ),
     PropertyTemplate(
         "P140", "종교", "item", True,
-        ("{주제}의 종교는?", "{주제}{이} 믿은 종교는?"),
+        ("{주제}의 종교는?", "{주제}의 종교는 무엇인가?"),
         ("종교", "신자", "신앙", "교도", "세례", "출가", "승려", "가톨릭", "천주교", "개신교", "기독교", "불교",
-         "이슬람", "목사", "신부"),
+         "이슬람", "목사", "신부", "무슬림", "시아파", "수니파", "힌두", "유대", "정교회", "성공회", "루터",
+         "장로", "그리스도", "신도"),
         "other", common_values=True,
     ),
     PropertyTemplate(
@@ -137,14 +143,15 @@ PROPERTIES: tuple[PropertyTemplate, ...] = (
     ),
     PropertyTemplate(
         "P131", "소재 행정 구역", "item", False,
-        ("{주제}{은} 어느 행정 구역에 있나?", "{주제}의 소재지는?"),
-        ("위치", "소재", "주소"), "other", common_values=True, sentence_words=("있는", "있다", "자리"),
+        ("{주제}{은} 어느 행정 구역에 있나?", "{주제}{은} 어디에 있나?"),
+        ("위치", "소재", "주소"), "other", common_values=True,
+        answer_words=("위치", "소재", "주소", "있는", "있다", "자리"),
     ),
     PropertyTemplate(
         "P159", "본사 소재지", "item", False,
-        ("{주제}의 본사는 어디에 있나?", "{주제}의 본부가 있는 곳은?"),
+        ("{주제}의 본사는 어디에 있나?", "{주제}의 본사가 있는 곳은?"),
         ("본사", "본부", "본점", "소재", "본거지", "사옥"), "other", common_values=True,
-        sentence_words=("있는", "있다"),
+        answer_words=("본사", "본부", "본점", "소재", "본거지", "사옥", "있는", "있다"),
     ),
 )  # fmt: skip
 PROPERTY_IDS = frozenset(template.pid for template in PROPERTIES)
@@ -171,7 +178,9 @@ class Fact:
     answers: tuple[str, ...]
     """참값 표기 전부 — 값이 여럿이면 모든 값의 표기 (어느 하나면 정답). EM · F1 다중 정답으로 넘긴다."""
     strict: bool
-    """참값이 속성 동의어와 같은 문장에 있어야 답 있음으로 본다 (흔한 값 속성 · 연도만 있는 날짜)."""
+    """참값이 속성 낱말과 같은 문장에 있어야 답 있음으로 본다 — 일 단위 생몰일(full_date_is_enough)만 아니다."""
+    year_only: bool = False
+    """날짜 참값이 연도뿐 — 질문은 "생년월일" 대신 첫 표현("언제 태어났나?")으로 묻는다."""
 
 
 @dataclass(frozen=True)
@@ -292,7 +301,7 @@ def facts(
         if template.person != human:
             continue
         answers: list[str] = []
-        year_only = False
+        year_only, full_dates = False, True
         for snak in _value_snaks(entity, template.pid):
             value = snak["datavalue"]["value"]
             if template.kind == "item":
@@ -300,34 +309,44 @@ def facts(
             elif (formatted := format_time(value)) is not None:
                 answers.append(formatted[0])
                 year_only = year_only or formatted[1]
+                full_dates = full_dates and formatted[0].endswith("일")
         if answers and not any(squash(answer) in title for answer in answers):
-            strict = template.common_values or year_only
-            found.append(Fact(qid, subject, template.pid, tuple(dict.fromkeys(answers)), strict))
+            strict = not (template.full_date_is_enough and full_dates)
+            unique = tuple(dict.fromkeys(answers))
+            found.append(Fact(qid, subject, template.pid, unique, strict, year_only=year_only))
     return found
 
 
 def fact_question(fact: Fact) -> FactQuestion:
-    """Fact 의 질문. 표현은 (QID, 속성) 해시로 고른다 — 다시 만들어도 같고, 표현이 문항마다 섞인다."""
+    """Fact 의 질문. 표현은 (QID, 속성) 해시로 고른다 — 다시 만들어도 같고, 표현이 문항마다 섞인다.
+
+    주제는 제목 끝의 구분어를 떼고 쓴다 ("이민진 (뮤지컬 배우)" → "이민진") — 사람은 구분어를 붙여 묻지 않는다.
+    연도뿐인 날짜는 첫 표현("언제 태어났나?")으로 — "생년월일은?"에 연도만 답하게 되지 않게.
+    """
     template = next(t for t in PROPERTIES if t.pid == fact.pid)
-    index = _stable_index(f"{fact.qid}:{fact.pid}", len(template.questions))
+    index = (
+        0 if fact.year_only else _stable_index(f"{fact.qid}:{fact.pid}", len(template.questions))
+    )
     return FactQuestion(
         id=f"{fact.qid}-{fact.pid}",
-        question=render(template.questions[index], fact.subject),
+        question=render(template.questions[index], _QUALIFIER.sub("", fact.subject)),
         fact=fact,
         template=template,
     )
 
 
 def sensitive_question(qid: str, subject: str) -> tuple[str, str]:
-    """(id, 질문) — 민감 부분집합. 기대 답은 null 뿐이다."""
+    """(id, 질문) — 민감 부분집합. 기대 답은 null 뿐이다. 주제는 구분어를 떼고 쓴다."""
     index = _stable_index(f"{qid}:sensitive", len(SENSITIVE_QUESTIONS))
-    return f"{qid}-sensitive{index}", render(SENSITIVE_QUESTIONS[index], subject)
+    return f"{qid}-sensitive{index}", render(
+        SENSITIVE_QUESTIONS[index], _QUALIFIER.sub("", subject)
+    )
 
 
 def label_fact(question: FactQuestion, hits: Sequence[tuple[str, str]]) -> FactLabel:
     """상위 청크 (제목, 본문) 로 라벨을 붙인다.
 
-    answerable: 주제 문서 청크에 참값이 있다 (strict 면 속성 동의어와 같은 문장에).
+    answerable: 주제 문서 청크에 참값이 있다 (strict 면 속성 낱말(answer_words, 없으면 synonyms)과 같은 문장에).
     no_fact: 주제 문서가 검색됐는데 상위 청크 어디에도 참값이 없고, 주제를 다루는 청크(주제 문서 청크 · 주제 이름이
       나오는 청크)에 속성 동의어도 없다 — 동의어만 있어도 빼는 건 다른 표기로 적힌 참값을 지어냄으로 세지 않으려는 것.
       다른 문서 청크에 참값이 있어도 근거 있는 답이라 뺀다. 날짜 속성은 주제 문서 청크에 날짜 표기가 하나라도 있으면
@@ -349,10 +368,10 @@ def label_fact(question: FactQuestion, hits: Sequence[tuple[str, str]]) -> FactL
         about_subject.append(text)
         answer_in_subject = answer_in_subject or any(answer in squash(text) for answer in answers)
         date_in_subject = date_in_subject or bool(_DATE.search(text))
+        answer_words = template.answer_words or template.synonyms
         for sentence in _sentences(text) if fact.strict else [text]:
             if any(answer in squash(sentence) for answer in answers) and (
-                not fact.strict
-                or any(word in sentence for word in template.synonyms + template.sentence_words)
+                not fact.strict or any(word in sentence for word in answer_words)
             ):
                 return FactLabel("answerable", "answer_in_subject_chunk", rank)
     if answer_in_subject:
