@@ -69,7 +69,7 @@ configs/                 인제스트 · 검색 · 답변 정책 · LLM 설정
 src/playground_wiki/
   sources/               WikiSource (덤프 스트리밍 파싱)
   ingest/                WikiCleaner (위키 마크업 정제)
-  generation/            AnswerPolicy (리랭커 점수로 grounded · partial · refuse, 단계별 생성 설정) · 프롬프트(prompts/) · 대화 만들기
+  generation/            AnswerPolicy (리랭커 점수로 grounded · partial · refuse, 단계별 생성 설정) · 프롬프트(prompts/) · 대화 만들기 · 출처 번호 → 제목 · 링크
   evaluation/            평가 문항 나누기(KorQuAD 문단 해시) · 답변 정책 임계값 고르기
   api/                   FastAPI — /search · /health (검색 엔진은 playground_retrieval)
 scripts/                 덤프 다운로드 · 파싱 · 인제스트 · BM25 색인 · 평가 · ANN 벤치 · 답변 정책 임계값(calibrate_threshold.py)

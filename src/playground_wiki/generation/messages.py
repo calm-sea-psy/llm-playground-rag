@@ -70,12 +70,16 @@ def build_prompt(
 
 
 def format_context(hits: Sequence[Hit]) -> str:
-    """검색 결과를 `<document title="…">` 블록으로 이어 붙인다. 본문 속 블록 태그 흉내는 지운다."""
+    """검색 결과를 `<document id="1" title="…">` 블록으로 이어 붙인다. 본문 속 블록 태그 흉내는 지운다.
+
+    id 는 1부터 hits 순서대로 — 모델은 출처를 이 번호로만 쓰고 서버가 제목 · 링크로 바꾼다 (ADR-026).
+    `citations.sources(hits)` 와 같은 번호다.
+    """
     blocks = []
-    for hit in hits:
+    for number, hit in enumerate(hits, start=1):
         title = hit.chunk.title.replace('"', "'")
         text = _DOCUMENT_TAG.sub("", hit.chunk.text)
-        blocks.append(f'<document title="{title}">\n{text}\n</document>')
+        blocks.append(f'<document id="{number}" title="{title}">\n{text}\n</document>')
     return "\n\n".join(blocks)
 
 
