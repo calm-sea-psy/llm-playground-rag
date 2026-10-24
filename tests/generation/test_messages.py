@@ -1,3 +1,5 @@
+from datetime import date
+
 import pytest
 from playground_corpus import Chunk
 from playground_llm import ModelSpec, PromptError, PromptLibrary, PromptTemplate
@@ -10,12 +12,14 @@ from playground_wiki.generation import (
     build_prompt,
     check_profiles,
     format_context,
+    korean_date,
 )
 
 LIBRARY = PromptLibrary.load(PROMPT_DIR)
 SPEC = ModelSpec("ollama", "gemma4:12b")
 GROUNDED = Profile(SPEC, system=("base@v2", "grounded@v1"), user="question@v1", timeout_sec=60)
 PARTIAL = Profile(SPEC, system=("base@v2", "partial@v2"), user="question@v1", timeout_sec=120)
+TODAY = "2026년 10월 24일"
 DUMP_DATE = "2026년 10월 1일"
 
 
@@ -34,7 +38,12 @@ HITS = [
 
 def test_instructions_go_to_system_and_documents_to_user():
     prompt = build_prompt(
-        GROUNDED, LIBRARY, question="경복궁을 중건한 사람은?", context=HITS, dump_date=DUMP_DATE
+        GROUNDED,
+        LIBRARY,
+        question="경복궁을 중건한 사람은?",
+        context=HITS,
+        today=TODAY,
+        dump_date=DUMP_DATE,
     )
 
     system, user = prompt.messages
@@ -48,7 +57,9 @@ def test_instructions_go_to_system_and_documents_to_user():
 
 
 def test_partial_uses_its_own_block_without_not_found():
-    prompt = build_prompt(PARTIAL, LIBRARY, question="q", context=HITS, dump_date=DUMP_DATE)
+    prompt = build_prompt(
+        PARTIAL, LIBRARY, question="q", context=HITS, today=TODAY, dump_date=DUMP_DATE
+    )
 
     system = prompt.messages[0].content
     assert "문서 밖 일반 지식" in system
@@ -56,10 +67,30 @@ def test_partial_uses_its_own_block_without_not_found():
 
 
 def test_version_names_every_part_in_order():
-    prompt = build_prompt(GROUNDED, LIBRARY, question="q", context=HITS, dump_date=DUMP_DATE)
+    prompt = build_prompt(
+        GROUNDED, LIBRARY, question="q", context=HITS, today=TODAY, dump_date=DUMP_DATE
+    )
 
     refs = [part.split(":")[0] for part in prompt.version.split("+")]
     assert refs == ["base@v2", "grounded@v1", "question@v1"]
+
+
+def test_base_v3_states_today_and_dump_date_as_facts():
+    # 모델은 오늘을 모른다 — 날짜 없이 "덤프 뒤는 모른다"고만 시키면 오늘을 덤프 날짜로 가정한다
+    profile = Profile(SPEC, system=("base@v3", "partial@v2"), user="question@v1", timeout_sec=60)
+
+    system = (
+        build_prompt(profile, LIBRARY, question="q", context=HITS, today=TODAY, dump_date=DUMP_DATE)
+        .messages[0]
+        .content
+    )
+
+    assert f"오늘은 {TODAY} 이고, 문서는 {DUMP_DATE} 기준" in system
+    assert "날짜를 판단할 때는 이 값을 따른다" in system  # 모델이 아는 '지금' 과 견주지 않게
+
+
+def test_korean_date_drops_leading_zeros():
+    assert korean_date(date(2026, 10, 1)) == "2026년 10월 1일"
 
 
 def test_context_strips_block_tags_from_chunk_text():
