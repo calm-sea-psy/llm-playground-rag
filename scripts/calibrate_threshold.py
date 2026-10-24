@@ -42,7 +42,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pyarrow.parquet as pq
-import yaml
 from playground_evalkit import (
     KorQuADItem,
     contains_answer,
@@ -57,7 +56,7 @@ from playground_retrieval.core import Hit
 from playground_retrieval.search import SearchResult, SearchService
 from playground_retrieval.store import PgStore, QdrantStore
 
-from playground_wiki.api.config import CONFIG_DIR, ApiConfig, load_answer_policy
+from playground_wiki.api.config import CONFIG_DIR, ApiConfig, load_answer_policy, load_dump_date
 from playground_wiki.evaluation import (
     Fit,
     LabeledScores,
@@ -344,7 +343,7 @@ def probe(
     )
     library = PromptLibrary.load(PROMPT_DIR)
     check_profiles([profile], library)
-    dump_date = _dump_date()
+    dump_date = load_dump_date(CONFIG_DIR)
     print(
         f"{rows_name} {len(rows)}개 → partial {profile.spec.spec_id} · {'+'.join(profile.system)}",
         flush=True,
@@ -518,13 +517,6 @@ def _category_rows(rows: list[dict]) -> list[dict]:
         }
         for category, counts in sorted(by_category.items())
     ]
-
-
-def _dump_date() -> str:
-    """configs/ingest.yaml 의 덤프 날짜(YYYYMMDD)를 프롬프트에 넣을 꼴로 ("2026년 10월 1일")."""
-    ingest = yaml.safe_load((CONFIG_DIR / "ingest.yaml").read_text(encoding="utf-8"))
-    raw = ingest["source"]["dump_date"]
-    return f"{raw[:4]}년 {int(raw[4:6])}월 {int(raw[6:])}일"
 
 
 def _report(
