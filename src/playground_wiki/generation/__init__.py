@@ -14,6 +14,7 @@ from playground_wiki.generation.messages import (
     build_prompt,
     check_profiles,
     format_context,
+    korean_date,
 )
 from playground_wiki.generation.policy import (
     LLM_STAGES,
@@ -41,6 +42,7 @@ __all__ = [
     "build_prompt",
     "check_profiles",
     "format_context",
+    "korean_date",
     "resolve_citations",
     "sources",
     "wiki_url",

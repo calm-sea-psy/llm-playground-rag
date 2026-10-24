@@ -72,7 +72,7 @@ from playground_wiki.evaluation.calibration import (
     MAX_FALSE_REFUSAL,
     PARTIAL_WEIGHT,
 )
-from playground_wiki.generation import PROMPT_DIR, build_prompt, check_profiles
+from playground_wiki.generation import PROMPT_DIR, build_prompt, check_profiles, korean_date
 
 SUBSET = Path("data/parsed/kowiki-subset-10000")  # subset.json: KorQuAD dev 경로 · 제목 보정표 (D4)
 # 전체 덤프 파싱 결과 — 적재한 kowiki_kure-v1 컬렉션과 같은 문서
@@ -344,7 +344,12 @@ def probe(*, think: str | None, max_tokens: int | None, num_ctx: int | None) -> 
                 if chunk_id in chunks
             ]
             prompt = build_prompt(
-                profile, library, question=row["question"], context=hits, dump_date=dump_date
+                profile,
+                library,
+                question=row["question"],
+                context=hits,
+                today=korean_date(datetime.now(UTC).astimezone().date()),
+                dump_date=dump_date,
             )
             result = {
                 "id": row["id"],

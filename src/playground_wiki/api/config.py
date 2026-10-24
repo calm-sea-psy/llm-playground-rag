@@ -3,6 +3,7 @@
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Self
 
@@ -12,7 +13,7 @@ from playground_retrieval.search import SearchSettings
 from playground_retrieval.store import PgConfig
 
 from playground_wiki.gate import QueryGate, Tokenizer
-from playground_wiki.generation import AnswerPolicy, Profile, Thresholds
+from playground_wiki.generation import AnswerPolicy, Profile, Thresholds, korean_date
 
 CONFIG_DIR = Path("configs")  # 레포 루트에서 실행할 때. RAG_CONFIG_DIR 로 바꾼다
 BM25_INDEX_DIR = Path("data/index/bm25")  # scripts/build_bm25.py 가 {컬렉션} 폴더로 저장한다
@@ -64,8 +65,7 @@ class ApiConfig:
 def load_dump_date(config_dir: Path) -> str:
     """ingest.yaml 의 덤프 날짜(YYYYMMDD)를 프롬프트 · 관문 고정 답에 넣을 꼴로 ("2026년 10월 1일")."""
     ingest = yaml.safe_load((config_dir / "ingest.yaml").read_text(encoding="utf-8"))
-    raw = str(ingest["source"]["dump_date"])
-    return f"{raw[:4]}년 {int(raw[4:6])}월 {int(raw[6:])}일"
+    return korean_date(datetime.strptime(str(ingest["source"]["dump_date"]), "%Y%m%d").date())
 
 
 def load_query_gate(config_dir: Path, tokenizer: Tokenizer) -> QueryGate | None:

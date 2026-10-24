@@ -6,6 +6,7 @@
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 
 from playground_llm import Message, PromptLibrary, PromptTemplate, compose
@@ -17,7 +18,7 @@ PROMPT_DIR = Path(__file__).parent / "prompts"
 """위키 프롬프트 파일 (`{이름}/{버전}.md`). 쓰는 쪽이 시작할 때 `PromptLibrary.load(PROMPT_DIR)` 로 읽는다."""
 NOT_FOUND = "주어진 문서에서 답을 찾을 수 없습니다."
 """grounded 프롬프트가 답을 못 찾으면 이 문장만 쓰라고 시킨다. 줄글 답의 거절 판정에 그대로 쓴다."""
-SYSTEM_VARIABLES = frozenset({"dump_date", "not_found"})
+SYSTEM_VARIABLES = frozenset({"today", "dump_date", "not_found"})
 """system 조각이 쓸 수 있는 자리표시자. 문서 · 질문은 여기에 들어가지 않는다."""
 USER_VARIABLES = frozenset({"context", "question"})
 """user 조각이 정확히 써야 하는 자리표시자."""
@@ -41,6 +42,7 @@ def build_prompt(
     *,
     question: str,
     context: Sequence[Hit],
+    today: str,
     dump_date: str,
 ) -> ChatPrompt:
     """프로필의 프롬프트 조각으로 system · user 턴을 만든다.
@@ -50,16 +52,17 @@ def build_prompt(
       library: `PROMPT_DIR` 에서 읽은 프롬프트 모음.
       question: 사용자 질문 원문.
       context: 답변 근거로 넘길 검색 결과 (`Decision.context`).
-      dump_date: 덤프 기준일. 사람이 읽는 꼴로 (예: "2026년 10월 1일").
+      today: 서버가 아는 오늘 날짜. 사람이 읽는 꼴로 (예: "2026년 10월 24일"). 모델은 오늘을 모른다 —
+        값 없이 "덤프 뒤는 모른다"고만 시키면 오늘을 덤프 날짜로 가정하거나 날짜를 지어낸다.
+      dump_date: 덤프 기준일. 같은 꼴로 (예: "2026년 10월 1일").
 
     Raises:
       PromptError: 프로필이 가리키는 프롬프트가 없거나 자리표시자를 채울 수 없을 때.
     """
     system_parts = [library.get(ref) for ref in profile.system]
-    # 단계마다 쓰는 값이 달라(not_found 는 grounded 만) 조각들이 쓰는 것만 넘긴다. 빠진 값은 compose 가 잡는다
-    system = compose(
-        system_parts, _used(system_parts, {"dump_date": dump_date, "not_found": NOT_FOUND})
-    )
+    # 조각마다 쓰는 값이 달라(not_found 는 grounded 만, today 는 base@v3 부터) 쓰는 것만 넘긴다. 빠진 값은 compose 가 잡는다
+    values = {"today": today, "dump_date": dump_date, "not_found": NOT_FOUND}
+    system = compose(system_parts, _used(system_parts, values))
     user = compose(
         [library.get(profile.user)], {"context": format_context(context), "question": question}
     )
@@ -67,6 +70,11 @@ def build_prompt(
         messages=(Message("system", system.text), Message("user", user.text)),
         version=f"{system.version}+{user.version}",
     )
+
+
+def korean_date(day: date) -> str:
+    """프롬프트 · 고정 답에 넣는 날짜 꼴 ("2026년 10월 24일")."""
+    return f"{day.year}년 {day.month}월 {day.day}일"
 
 
 def format_context(hits: Sequence[Hit]) -> str:

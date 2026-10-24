@@ -74,11 +74,16 @@ def test_repo_profiles_point_to_repo_prompts():
     check_profiles(profiles.values(), library)
     for profile in profiles.values():
         prompt = build_prompt(
-            profile, library, question="조선의 수도는?", context=[hit], dump_date="2026년 10월 1일"
+            profile,
+            library,
+            question="조선의 수도는?",
+            context=[hit],
+            today="2026년 10월 24일",
+            dump_date="2026년 10월 1일",
         )
         assert "조선의 수도는?" in prompt.messages[1].content
     grounded = build_prompt(
-        profiles["grounded"], library, question="q", context=[hit], dump_date="d"
+        profiles["grounded"], library, question="q", context=[hit], today="t", dump_date="d"
     )
     assert NOT_FOUND in grounded.messages[0].content
 
