@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 import pytest
 
 from playground_wiki.gate import (
@@ -12,6 +15,8 @@ from playground_wiki.gate import (
     realtime_match,
     smalltalk_table,
 )
+
+BLIND_SET = Path(__file__).parent / "gate-blind-v1.jsonl"
 
 # 위키로 답하는 질문인데 부분 문자열 규칙이면 걸리는 것 — 하나도 걸리면 안 된다
 NEGATIVES = [
@@ -34,6 +39,10 @@ NEGATIVES = [
     "현재 세계 인구 순위",
     "물가 지수란?",
     "오늘의 요리",
+    "시세 차익이란?",
+    "비트코인 시세조종 사건",  # 시세 뒤에 명사가 오면 개념 질문
+    "2021년 비트코인 최고 시세는?",  # 연도가 있으면 옛 값
+    "조선 후기 쌀 시세",  # '시세' 하나로는 걸지 않는다
     "현재형 가격 표현",  # 현재/NNG + 형/XSN — 접미사가 붙으면 때 표지가 아니다
     pytest.param(
         "현재 가격 혁명 시기의 유럽 경제",
@@ -136,11 +145,6 @@ def test_question_empty_after_normalize_is_chitchat(gate: QueryGate, question: s
         ("오늘 코스피 지수", ("오늘", "코스피")),
         ("어제 드라마 시청률", ("어제", "시청 률")),
         ("오늘 뉴스 헤드라인 뭐야", ("오늘", "헤드라인")),
-        pytest.param(
-            "오늘 뉴스 뭐 있어",
-            ("오늘", "뉴스"),
-            marks=pytest.mark.xfail(strict=True, reason="뉴스 는 대상어에서 뺌 — 받아들인 놓침"),
-        ),
     ],
 )
 def test_realtime_needs_a_time_marker_and_a_target(gate: QueryGate, question: str, matched: tuple):
@@ -152,6 +156,29 @@ def test_split_compound_also_matches_as_one_token():
     tokens = [Token("어제", "MAG"), Token("시청률", "NNG")]
 
     assert realtime_match(tokens) == GateMatch("realtime", ("어제", "시청 률"))
+
+
+@pytest.mark.parametrize(
+    ("question", "matched"),
+    [("비트코인 시세", ("비트코인 시세",)), ("금 시세 알려줘", ("금 시세",))],
+)
+def test_asset_price_quote_needs_no_time_marker(gate: QueryGate, question: str, matched: tuple):
+    assert gate.check(question) == GateMatch("realtime", matched)
+
+
+def test_news_is_left_out_on_purpose(gate: QueryGate):
+    # 결함이 아니라 설계 — '뉴스' 를 대상어에 넣으면 "현재 KBS 뉴스 9 앵커는 누구?" 같은 위키 질문이 걸린다.
+    # 놓친 질문은 검색 · partial 의 "알 수 없음"이 받는다. "오늘 뉴스 헤드라인" 은 헤드라인 으로 잡는다
+    assert gate.check("오늘 뉴스 뭐 있어") is None
+
+
+def test_rule_blind_wiki_questions_pass(gate: QueryGate):
+    # 규칙을 모르는 쪽이 쓴 세트의 위키 질문 50 — 실시간 질문과 헷갈리게 쓴 것이라 정밀도의 회귀 검사로 쓴다
+    rows = [json.loads(line) for line in BLIND_SET.read_text(encoding="utf-8").splitlines() if line]
+    wiki = [row["question"] for row in rows if row["label"] == "wiki"]
+
+    assert len(wiki) == 50
+    assert [question for question in wiki if gate.check(question) is not None] == []
 
 
 def test_target_without_a_time_marker_passes(gate: QueryGate):

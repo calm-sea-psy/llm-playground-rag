@@ -1,0 +1,100 @@
+{"id": "A001", "question": "지금 서울 날씨 어때?", "label": "realtime"}
+{"id": "A002", "question": "오늘 코스피 마감", "label": "realtime"}
+{"id": "A003", "question": "현재 원달러 환율이 얼마인지 알려 주세요.", "label": "realtime"}
+{"id": "A004", "question": "비트코인 시세", "label": "realtime"}
+{"id": "A005", "question": "오늘저녁에비와?", "label": "realtime"}
+{"id": "A006", "question": "어젯밤 프로야구 경기 결과 알려줘", "label": "realtime"}
+{"id": "A007", "question": "이번 주 로또 당첨번호가 뭐였어요?", "label": "realtime"}
+{"id": "A008", "question": "지금 강남역 쪽 도로 많이 막혀?", "label": "realtime"}
+{"id": "A009", "question": "오늘미세먼지농도", "label": "realtime"}
+{"id": "A010", "question": "삼성전자의 현재 주가는 얼마인가요?", "label": "realtime"}
+{"id": "A011", "question": "방금 지진 났다던데 규모가 몇이래?", "label": "realtime"}
+{"id": "A012", "question": "오늘 박스오피스 1위 영화", "label": "realtime"}
+{"id": "A013", "question": "지금 한국 시간으로 몇 시야?", "label": "realtime"}
+{"id": "A014", "question": "이번 주말 제주도 날씨 어떨까요?", "label": "realtime"}
+{"id": "A015", "question": "내일 아침 출근길에 눈 온대?", "label": "realtime"}
+{"id": "A016", "question": "손흥민 오늘 선발로 나와?", "label": "realtime"}
+{"id": "A017", "question": "우리 동네 오늘 휘발유 제일 싼 주유소", "label": "realtime"}
+{"id": "A018", "question": "태풍 지금 어디쯤 올라왔어요?", "label": "realtime"}
+{"id": "A019", "question": "KTX 서울발 부산행 지금 지연되는 거 있나요?", "label": "realtime"}
+{"id": "A020", "question": "방금 뜬 속보 뭐야", "label": "realtime"}
+{"id": "A021", "question": "오늘의 운세 쥐띠", "label": "realtime"}
+{"id": "A022", "question": "이번 주에 새로 개봉한 영화 뭐 있어?", "label": "realtime"}
+{"id": "A023", "question": "오늘 금통위 결과 나왔어?", "label": "realtime"}
+{"id": "A024", "question": "카톡 지금 먹통인데 장애 난 거야?", "label": "realtime"}
+{"id": "A025", "question": "오늘 급식 메뉴", "label": "realtime"}
+{"id": "A026", "question": "이더리움은 지금 얼마예요", "label": "realtime"}
+{"id": "A027", "question": "엔화 환율 오늘 100엔에 얼마야?", "label": "realtime"}
+{"id": "A028", "question": "K리그 이번 주 순위", "label": "realtime"}
+{"id": "A029", "question": "인천공항 출국장 지금 얼마나 붐벼요?", "label": "realtime"}
+{"id": "A030", "question": "이번 주말 프리미어리그 경기 일정이랑 중계 채널 알려줘", "label": "realtime"}
+{"id": "A031", "question": "설악산 단풍 지금 어디까지 내려왔어요?", "label": "realtime"}
+{"id": "A032", "question": "이번 주 대통령 지지율 여론조사 결과", "label": "realtime"}
+{"id": "A033", "question": "넷플릭스 한국 오늘의 TOP 10 1위가 뭐야", "label": "realtime"}
+{"id": "A034", "question": "오늘 금값 한 돈에 얼마", "label": "realtime"}
+{"id": "A035", "question": "2호선 지금 운행 지연 중이에요?", "label": "realtime"}
+{"id": "A036", "question": "어제 뉴욕증시 어떻게 마감했어?", "label": "realtime"}
+{"id": "A037", "question": "오늘 밤 TV 편성표", "label": "realtime"}
+{"id": "A038", "question": "오늘 서울 일몰 몇 시야?", "label": "realtime"}
+{"id": "A039", "question": "WTI 유가 지금 얼마인지 궁금합니다", "label": "realtime"}
+{"id": "A040", "question": "롤 서버 지금 점검 중임?", "label": "realtime"}
+{"id": "A041", "question": "멜론 차트 1위 지금 뭐야", "label": "realtime"}
+{"id": "A042", "question": "아까 총리 기자회견에서 뭐라고 말했어?", "label": "realtime"}
+{"id": "A043", "question": "이번 달 서울 아파트 평균 매매가 최신 수치 알려줘", "label": "realtime"}
+{"id": "A044", "question": "이번 주 독감 환자 얼마나 늘었대?", "label": "realtime"}
+{"id": "A045", "question": "방금 끝난 경기 최종 스코어 알려 주세요", "label": "realtime"}
+{"id": "A046", "question": "오늘 서울 최고기온이 몇 도까지 올라가?", "label": "realtime"}
+{"id": "A047", "question": "지금 문 연 약국 근처에 있어?", "label": "realtime"}
+{"id": "A048", "question": "내가 시킨 택배 지금 어디야?", "label": "realtime"}
+{"id": "A049", "question": "아이폰 최신 모델 지금 최저가가 얼마야?", "label": "realtime"}
+{"id": "A050", "question": "오늘 국회 본회의에서 통과된 법안 뭐야", "label": "realtime"}
+{"id": "B001", "question": "임진왜란 언제 일어났어?", "label": "wiki"}
+{"id": "B002", "question": "지금의 서울이 조선의 수도가 된 건 언제부터예요?", "label": "wiki"}
+{"id": "B003", "question": "측우기는 누가 만들었나요?", "label": "wiki"}
+{"id": "B004", "question": "코스피 지수의 기준 시점이 언제야?", "label": "wiki"}
+{"id": "B005", "question": "환율은 어떻게 결정되는지 설명해 주세요.", "label": "wiki"}
+{"id": "B006", "question": "서킷브레이커 제도", "label": "wiki"}
+{"id": "B007", "question": "비트코인 반감기는 몇 년마다 오나요?", "label": "wiki"}
+{"id": "B008", "question": "태풍이랑 허리케인 차이가 뭐야?", "label": "wiki"}
+{"id": "B009", "question": "오늘날 쓰는 그레고리력은 누가 만들었어?", "label": "wiki"}
+{"id": "B010", "question": "1994년 미국 월드컵 우승국", "label": "wiki"}
+{"id": "B011", "question": "한국 표준시는 UTC보다 몇 시간 빨라?", "label": "wiki"}
+{"id": "B012", "question": "서머타임제는왜생긴거야", "label": "wiki"}
+{"id": "B013", "question": "윤년은 왜 있는 거야?", "label": "wiki"}
+{"id": "B014", "question": "지진 규모와 진도는 어떻게 달라?", "label": "wiki"}
+{"id": "B015", "question": "한국 장마철 시기", "label": "wiki"}
+{"id": "B016", "question": "로또 6/45에서 1등에 당첨될 확률은 어떻게 계산해?", "label": "wiki"}
+{"id": "B017", "question": "한 돈이 몇 그램이에요?", "label": "wiki"}
+{"id": "B018", "question": "WTI는 무슨 말의 약자야?", "label": "wiki"}
+{"id": "B019", "question": "기준금리를 올리면 물가에 어떤 영향이 있는지 알려 주세요.", "label": "wiki"}
+{"id": "B020", "question": "훈민정음은 몇 년에 반포됐어?", "label": "wiki"}
+{"id": "B021", "question": "코스닥은 언제 출범했어?", "label": "wiki"}
+{"id": "B022", "question": "삼성전자의 창립 연도는?", "label": "wiki"}
+{"id": "B023", "question": "KTX 개통 연도", "label": "wiki"}
+{"id": "B024", "question": "서울 지하철 1호선이 처음 개통된 날은?", "label": "wiki"}
+{"id": "B025", "question": "인천국제공항은 언제 개항했나요?", "label": "wiki"}
+{"id": "B026", "question": "한국 프로야구는 몇 년에 시작됐어?", "label": "wiki"}
+{"id": "B027", "question": "10월을 왜 시월이라고 불러?", "label": "wiki"}
+{"id": "B028", "question": "음력 설날은 어떻게 정해지나요?", "label": "wiki"}
+{"id": "B029", "question": "추석의 유래", "label": "wiki"}
+{"id": "B030", "question": "대한민국 대통령 5년 단임제는 언제부터 시행됐어?", "label": "wiki"}
+{"id": "B031", "question": "세계 인구가 처음 10억 명을 넘은 건 언제야?", "label": "wiki"}
+{"id": "B032", "question": "마지막 빙하기는 언제 끝났어?", "label": "wiki"}
+{"id": "B033", "question": "실시간 운영체제가 뭐예요?", "label": "wiki"}
+{"id": "B034", "question": "코로나19가 처음 보고된 곳은 어디야?", "label": "wiki"}
+{"id": "B035", "question": "일기예보는 어떤 원리로 만들어요?", "label": "wiki"}
+{"id": "B036", "question": "개기일식은 왜 생겨?", "label": "wiki"}
+{"id": "B037", "question": "달의 위상이 한 바퀴 도는 데 며칠 걸려?", "label": "wiki"}
+{"id": "B038", "question": "국제연합 본부는 어느 도시에 있어?", "label": "wiki"}
+{"id": "B039", "question": "김치가 지금처럼 빨개진 건 언제부터야?", "label": "wiki"}
+{"id": "B040", "question": "도레미파솔라시 음이름은 누가 붙였어?", "label": "wiki"}
+{"id": "B041", "question": "대체공휴일 제도는 언제 처음 생겼나요?", "label": "wiki"}
+{"id": "B042", "question": "엘니뇨 현상", "label": "wiki"}
+{"id": "B043", "question": "황사는 어디서 날아와?", "label": "wiki"}
+{"id": "B044", "question": "독감 백신은 왜 해마다 새로 맞아야 해요?", "label": "wiki"}
+{"id": "B045", "question": "티머니 교통카드는 언제부터 쓰기 시작했어?", "label": "wiki"}
+{"id": "B046", "question": "마라톤이 42.195km인 이유", "label": "wiki"}
+{"id": "B047", "question": "드라마 이번 생은 처음이라 주연 배우가 누구야?", "label": "wiki"}
+{"id": "B048", "question": "'내일은 또 다른 날이다'라는 마지막 대사로 유명한 소설이 뭐야?", "label": "wiki"}
+{"id": "B049", "question": "역사상 가장 강력했던 지진은 어디서 일어났어?", "label": "wiki"}
+{"id": "B050", "question": "한글 맞춤법 통일안은 언제 나왔어?", "label": "wiki"}

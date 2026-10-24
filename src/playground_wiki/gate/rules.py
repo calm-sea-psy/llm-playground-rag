@@ -2,12 +2,22 @@
 
 위키 밖 질문을 거절하는 일은 임계값이 아니라 partial 프롬프트의 "알 수 없음"과 이 관문이 나눠 맡는다.
 규칙은 좁게 둔다 — 놓친 질문은 검색 · partial 로 가서 "알 수 없음"이 받지만, 잘못 걸린 질문은 답을 잃는다.
+
+평가: 관문의 지표는 정밀도다. 재현율은 검색 · LLM 을 건너뛰어 아끼는 지연의 크기일 뿐이다.
+규칙을 모르는 쪽이 쓴 세트 tests/gate/gate-blind-v1.jsonl (2026-10-24, 실시간 50 · 헷갈리는 위키 질문 50)로
+실시간 14/50 · 위키 오탐 0/50. 문항을 보고 만든 offwiki 실시간으로는 12/12 였다 — 같은 세트로 고치고 재면 숫자가 부푼다.
+목록을 고칠 때는 이 세트(1)를 보고 고치고, 규칙을 모르는 쪽이 새로 쓴 세트(2)로 다시 잰다. 재현율 숫자만 보고 목록을
+불리지 않는다 — 넣을 낱말은 놓친 질문이 검색 · partial 에서 옛 값을 지금 값처럼 답한 꼴만이다.
+놓친 36개를 검색 → 답변 정책 → 생성(gemma4:12b, base@v2)까지 넣었더니 35개는 거절 · "알 수 없음" · 날짜 붙은 옛 값으로
+답했고, 1개("비트코인 시세")만 문서의 '현재'를 옮겨 옛 값을 지금 값처럼 답했다 — 그 꼴을 PRICE_QUOTES 로 넣었다.
+그래서 세트 1 의 실시간 15/50 은 세트를 보고 고친 뒤의 숫자라 재현율로 쓰지 않는다.
 """
 
 import re
 import unicodedata
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from itertools import pairwise
 from typing import Literal, get_args
 
 from playground_wiki.gate.tokens import Token, Tokenizer
@@ -172,6 +182,14 @@ TARGETS: tuple[tuple[str, ...], ...] = (
     ("스코어",),
     ("시청", "률"),
 )
+# 때 표지 없이도 걸리는 꼴 — 자산 바로 뒤의 '시세' 는 그 자체로 지금 값을 묻는다 ("비트코인 시세").
+# 규칙 모르는 세트에서 "비트코인 시세" 가 관문을 지나 grounded 로 가서, 문서의 '현재'를 옮겨 옛 값을 지금 값처럼 답했다.
+# 시세 뒤에 명사가 오면(시세 차익 · 시세조종) 개념 질문, 연도가 있으면(1997년 금 시세) 옛 값이라 걸지 않는다.
+# '시세' 하나만으로는 걸지 않는다 — "조선 후기 쌀 시세" 같은 위키 질문이 걸린다
+PRICE_QUOTES: tuple[tuple[str, ...], ...] = tuple(
+    (asset, "시세") for asset in ("비트코인", "이더리움", "코인", "금", "달러", "엔화", "유로")
+)
+NOUN_TAGS = frozenset({"NNG", "NNP", "NNB", "XSN"})
 
 # 종류별 고정 답. 실시간 답의 기준일은 덤프 날짜(configs/ingest.yaml source.dump_date)를 넣는다
 REPLIES: Mapping[str, str] = {
@@ -229,7 +247,7 @@ def smalltalk_table(lexicon: Mapping[str, Sequence[str]]) -> dict[str, str]:
 
 
 def realtime_match(tokens: Sequence[Token]) -> GateMatch | None:
-    """때 표지와 대상어가 함께 있으면 실시간 질문. 근거는 나온 때 표지 · 대상어 전부."""
+    """때 표지와 대상어가 함께 있거나 '자산 시세' 꼴이면 실시간 질문. 근거는 나온 때 표지 · 대상어 전부."""
     forms = [token.form for token in tokens]
     markers = [
         pattern
@@ -237,9 +255,16 @@ def realtime_match(tokens: Sequence[Token]) -> GateMatch | None:
         if not _part_of_other_word(tokens, end)
     ]
     targets = [pattern for _, pattern in _find(forms, TARGETS)]
-    if not markers or not targets:
-        return None
-    return GateMatch("realtime", tuple(" ".join(pattern) for pattern in markers + targets))
+    if markers and targets:
+        return GateMatch("realtime", tuple(" ".join(pattern) for pattern in markers + targets))
+    quotes = [
+        pattern
+        for end, pattern in _find(forms, PRICE_QUOTES)
+        if not (end < len(tokens) and tokens[end].tag in NOUN_TAGS)
+    ]
+    if quotes and not _has_year(tokens):
+        return GateMatch("realtime", tuple(" ".join(pattern) for pattern in quotes))
+    return None
 
 
 def fixed_reply(match: GateMatch, *, dump_date: str) -> str:
@@ -262,6 +287,11 @@ def _find(
             elif len(pattern) > 1 and forms[start] == "".join(pattern):
                 found.append((start + 1, pattern))
     return found
+
+
+def _has_year(tokens: Sequence[Token]) -> bool:
+    """'1997년' 같은 연도가 있으면 옛 값을 묻는 질문이다."""
+    return any(token.tag == "SN" and after.form == "년" for token, after in pairwise(tokens))
 
 
 def _part_of_other_word(tokens: Sequence[Token], end: int) -> bool:
