@@ -771,13 +771,13 @@ parquet = [
 
 [[package]]
 name = "playground-evalkit"
-version = "0.1.0"
-source = { git = "https://github.com/calm-sea-psy/llm-playground-llm?subdirectory=packages%2Fevalkit&tag=evalkit-v0.1.0#c25e10080a0babb8b2ed0de7ea5e6505f90eae7e" }
+version = "0.2.0"
+source = { git = "https://github.com/calm-sea-psy/llm-playground-llm?subdirectory=packages%2Fevalkit&tag=evalkit-v0.2.0#5e455b5f5ddc13a95074c42a213759a64876931d" }
 
 [[package]]
 name = "playground-llm"
 version = "0.0.0"
-source = { git = "https://github.com/calm-sea-psy/llm-playground-llm?subdirectory=packages%2Fllm&rev=21486e7aa63c2276f94af8ff18b8d758ec60164c#21486e7aa63c2276f94af8ff18b8d758ec60164c" }
+source = { git = "https://github.com/calm-sea-psy/llm-playground-llm?subdirectory=packages%2Fllm&rev=5e455b5f5ddc13a95074c42a213759a64876931d#5e455b5f5ddc13a95074c42a213759a64876931d" }
 
 [package.optional-dependencies]
 ollama = [
@@ -837,8 +837,8 @@ requires-dist = [
     { name = "lxml", specifier = ">=6.1.3" },
     { name = "mwparserfromhell", specifier = ">=0.7.2" },
     { name = "playground-corpus", extras = ["parquet", "local"], git = "https://github.com/calm-sea-psy/llm-playground-corpus?tag=v0.1.0" },
-    { name = "playground-evalkit", git = "https://github.com/calm-sea-psy/llm-playground-llm?subdirectory=packages%2Fevalkit&tag=evalkit-v0.1.0" },
-    { name = "playground-llm", extras = ["ollama"], git = "https://github.com/calm-sea-psy/llm-playground-llm?subdirectory=packages%2Fllm&rev=21486e7aa63c2276f94af8ff18b8d758ec60164c" },
+    { name = "playground-evalkit", git = "https://github.com/calm-sea-psy/llm-playground-llm?subdirectory=packages%2Fevalkit&tag=evalkit-v0.2.0" },
+    { name = "playground-llm", extras = ["ollama"], git = "https://github.com/calm-sea-psy/llm-playground-llm?subdirectory=packages%2Fllm&rev=5e455b5f5ddc13a95074c42a213759a64876931d" },
     { name = "playground-retrieval", extras = ["rerank"], git = "https://github.com/calm-sea-psy/llm-playground-retrieval?tag=v0.1.1" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "qdrant-client", specifier = ">=1.19.1" },
