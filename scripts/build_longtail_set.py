@@ -12,6 +12,10 @@ KorQuAD dev 는 2018년부터 공개돼 후보 모델이 문항을 봤을 수 �
   label       답 있음 · 답 없음 B · 버림(이유)을 붙여 → data/bench/longtail-labeled-v1.jsonl. 버린 것도 검색 결과와 함께
               남긴다 (선택 편향 없는 표본이 필요할 때)
   pilot       라벨마다 seed 로 몇 개씩 보여 준다 — 어색한 질문 · 너무 빡빡한 조건 · 빠진 표기를 눈으로 거른다
+  build       1단계 세트 → {out_dir}/f4-longtail-{검색 설정 해시}/items.jsonl · meta.json (LLM 레포 bench/data)
+              longtail(답 있음) LONGTAIL · no_fact(답 없음 B) NO_FACT · sensitive(사적 정보) SENSITIVE 개.
+              속성(민감은 질문 꼴)마다 돌아가며 골라 생년월일 · 출생지 같은 많은 속성이 세트를 차지하지 않게 하고,
+              한 주제(QID)에서는 문항 하나만. 남은 문항은 2단계 결선 몫이다
 
 Wikidata 는 CC0. 요청 규칙: 연락처가 담긴 User-Agent, 요청 하나씩 REQUEST_INTERVAL 초 간격, 429 면 물러난다.
 data/ 는 git 제외.
@@ -23,15 +27,18 @@ data/ 는 git 제외.
   uv run python scripts/build_longtail_set.py search
   uv run python scripts/build_longtail_set.py label
   uv run python scripts/build_longtail_set.py pilot
+  uv run python scripts/build_longtail_set.py build
 """
 
 import argparse
 import asyncio
+import hashlib
 import json
 import random
 import time
-from collections import Counter
-from collections.abc import Iterator, Sequence
+from collections import Counter, defaultdict
+from collections.abc import Callable, Iterator, Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -75,6 +82,14 @@ BATCH = 50  # wbgetentities 가 한 번에 받는 제목 · id 수
 REQUEST_INTERVAL = 1.0  # Wikimedia API 규칙 — 요청은 하나씩, 간격을 둔다
 MAX_RETRIES = 5
 PILOT_PER_LABEL = 10
+OUT_DIR = Path("../llm-playground-llm/bench/data")
+SET_RULES = "v1"  # 고르는 규칙(크기 · 돌아가며 고르기 · 주제당 하나)을 바꾸면 올린다 — 세트 이름 해시에 들어간다
+# 판정 라벨 → (세트 kind, 1단계 문항 수). 롱테일 답 있음은 KorQuAD 300 과 합치지 않고 따로 보고한다
+STAGE1 = {
+    "answerable": ("longtail", 100),
+    "no_fact": ("no_fact", 100),
+    "sensitive": ("sensitive", 30),
+}
 
 
 def main() -> None:
@@ -87,14 +102,18 @@ def main() -> None:
         "label": label,
         "pilot": pilot,
     }
-    steps[args.step]()
+    if args.step == "build":
+        build(args.out_dir)
+    else:
+        steps[args.step]()
 
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
-        "step", choices=["candidates", "fetch", "questions", "search", "label", "pilot"]
+        "step", choices=["candidates", "fetch", "questions", "search", "label", "pilot", "build"]
     )
+    parser.add_argument("--out-dir", type=Path, default=OUT_DIR, help="build 만: 세트를 쓸 곳")
     return parser.parse_args()
 
 
@@ -304,6 +323,120 @@ def pilot() -> None:
             if row["rank"]:
                 text = row["hits"][row["rank"] - 1]["text"].replace("\n", " ")
                 print(f"    {text[:160]}")
+
+
+def build(out_dir: Path) -> None:
+    rows = _read_jsonl(LABELED_PATH)
+    rng = random.Random(SEED)
+    used: set[str] = set()  # 한 주제(QID)에서 문항 하나 — 같은 문서를 두 번 묻지 않는다
+    items, pools, by_property = [], {}, {}
+    for label_name, (kind, size) in STAGE1.items():
+        group = [row for row in rows if row["label"] == label_name]
+        picked = _round_robin(group, size, used, rng, key=_stratum)
+        items += [_set_item(kind, row) for row in picked]
+        pools[kind] = len(group)
+        by_property[kind] = dict(Counter(_stratum(row) for row in picked).most_common())
+    settings = _search_settings()
+    version = f"f4-longtail-{_digest({'search': settings, 'rules': SET_RULES, 'stage1': STAGE1})}"
+    path = out_dir / version / "items.jsonl"
+    _write_jsonl(path, items)
+    meta = {
+        "version": version,
+        "created_at": datetime.now(tz=UTC).isoformat(timespec="seconds"),
+        "search": settings,
+        "seed": SEED,
+        "counts": dict(Counter(item["kind"] for item in items)),
+        "pools": pools,
+        "by_property": by_property,
+        "note": "Wikidata 템플릿 질문 — KorQuAD 자연 질문보다 쉽다. 라벨 노이즈는 50개 사람 검수로 잰다. "
+        "남은 문항(같은 주제 제외)은 2단계 결선 몫",
+    }
+    (path.parent / "meta.json").write_text(
+        json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    print(f"세트 {version}: {meta['counts']} (판정 풀 {pools})")
+    for kind, counts in by_property.items():
+        print(f"  {kind}: " + ", ".join(f"{name} {count}" for name, count in counts.items()))
+    print(f"저장: {path}")
+
+
+def _stratum(row: dict) -> str:
+    """돌아가며 고를 층 — 속성 이름, 민감 질문은 질문 꼴 (`…-sensitive{n}`)."""
+    return row.get("property") or row["id"].rsplit("-", 1)[-1]
+
+
+def _round_robin(
+    group: Sequence[dict],
+    size: int,
+    used: set[str],
+    rng: random.Random,
+    *,
+    key: Callable[[dict], str],
+) -> list[dict]:
+    """층마다 섞어 두고 층을 돌아가며 하나씩 size 개까지. 이미 쓴 주제는 건너뛰고, 고른 주제는 used 에 더한다."""
+    by_key: dict[str, list[dict]] = defaultdict(list)
+    for row in group:
+        by_key[key(row)].append(row)
+    for rows in by_key.values():
+        rows.sort(key=lambda row: row["id"])
+        rng.shuffle(rows)
+    picked: list[dict] = []
+    while len(picked) < size and any(by_key.values()):
+        for name in sorted(by_key):
+            rows = by_key[name]
+            while rows and rows[-1]["qid"] in used:
+                rows.pop()
+            if rows and len(picked) < size:
+                row = rows.pop()
+                picked.append(row)
+                used.add(row["qid"])
+    return picked
+
+
+def _set_item(kind: str, row: dict) -> dict:
+    return {
+        "id": f"{kind}:{row['id']}",
+        "kind": kind,
+        "question": row["question"],
+        "answers": row["answers"],
+        "gold_title": row["subject"],
+        "context": [
+            {
+                "rank": rank,
+                "chunk_id": hit["chunk_id"],
+                "title": hit["title"],
+                "section": hit["section"],
+                "text": hit["text"],
+                "score": hit["score"],
+            }
+            for rank, hit in enumerate(row["hits"], start=1)
+        ],
+        "strata": {
+            "backlinks": row["backlinks"],
+            "answer_shape": row.get("shape", "other"),
+            "property": _stratum(row),
+            "answer_rank": row["rank"] if kind == "longtail" else None,
+        },
+    }
+
+
+def _search_settings() -> dict:
+    settings = ApiConfig.from_env().search
+    return {
+        "collection": settings.collection,
+        "model": settings.model,
+        "candidates": settings.candidates,
+        "rrf_k": settings.rrf_k,
+        "rerank_candidates": settings.rerank_candidates,
+        "reranker_model": settings.reranker_model,
+        "top_k": TOP_K,
+    }
+
+
+def _digest(value: object) -> str:
+    return hashlib.sha256(
+        json.dumps(value, sort_keys=True, ensure_ascii=False).encode()
+    ).hexdigest()[:8]
 
 
 def _question_row(question: FactQuestion, backlinks: int) -> dict:
