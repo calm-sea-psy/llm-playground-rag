@@ -2,6 +2,9 @@ version = 1
 revision = 3
 requires-python = "==3.13.*"
 
+[manifest]
+constraints = [{ name = "kiwipiepy-model", specifier = "==0.24.0" }]
+
 [[package]]
 name = "annotated-doc"
 version = "0.0.5"
@@ -806,6 +809,7 @@ source = { editable = "." }
 dependencies = [
     { name = "faiss-cpu" },
     { name = "fastapi" },
+    { name = "kiwipiepy" },
     { name = "lxml" },
     { name = "mwparserfromhell" },
     { name = "playground-corpus", extra = ["local", "parquet"] },
@@ -829,6 +833,7 @@ dev = [
 requires-dist = [
     { name = "faiss-cpu", specifier = ">=1.15.1" },
     { name = "fastapi", specifier = ">=0.159.1" },
+    { name = "kiwipiepy", specifier = "==0.24.1" },
     { name = "lxml", specifier = ">=6.1.3" },
     { name = "mwparserfromhell", specifier = ">=0.7.2" },
     { name = "playground-corpus", extras = ["parquet", "local"], git = "https://github.com/calm-sea-psy/llm-playground-corpus?tag=v0.1.0" },
