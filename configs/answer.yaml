@@ -21,7 +21,10 @@ thresholds:
 # — 모델은 오늘을 몰라 덤프 날짜로 가정하거나 지어냈다. 2026-10-24 비교 (관문이 놓친 실시간 질문 32 + 위키 질문 5,
 # 같은 검색 결과): 날짜 오류 v2 4 · 5 → v3 0 · 0 · 0, '오늘 박스오피스 1위'를 옛 1위로 답한 것 v2 3회 중 2 → v3 0.
 # temperature 0 · seed 42 로도 같은 프롬프트의 답이 21/37 문장에서 갈렸다(Ollama GPU) — 라벨은 37/37 같았다.
-# 옛 수치를 '이번 주' 질문에 날짜만 붙여 답하는 grounded 1건(독감)은 그대로 — 다음 지시(v4)의 대상
+# base@v4 는 v3 + 두 줄: 시간이 지나면 바뀔 값엔 시점을 밝히고 문서의 '현재'는 '문서가 쓰일 당시'로, 질문이 최근 값을 묻는데
+# 문서 값이 오래되어 그사이 바뀌었을 게 거의 확실할 때만 첫 문장에서 '최근 값은 알 수 없다'. 2026-10-24 비교
+# (44문항 × 5회, reports/2026-10-24-prompt-v4.md): 지금 모름 미표시 v3 17 → v4 0, 옛 값을 지금 값처럼 1 → 0,
+# 과잉 거절 0 → 0, 시간과 무관한 대조 5 정답 같음 · 접두 0. 부작용: '서울 인구는 얼마야?' 에 '최근 인구는 알 수 없으나' 5/5
 # 모델 · 값은 F4 벤치 전 임시 — LLM 레포 models/*.yaml 결과로 바꾸고 출처를 적는다.
 # think 는 따옴표로 쓴다 — YAML 은 off · on 을 bool 로 읽는데, ModelSpec 은 bool 을 받지 않는다.
 # think 가 켜지면 thinking 토큰도 max_tokens(Ollama num_predict) 안에서 쓴다.
@@ -30,7 +33,7 @@ profiles:
     provider: ollama
     model: gemma4:12b
     params: {think: "off", temperature: 0.1, max_tokens: 512, num_ctx: 8192}
-    system: [base@v3, grounded@v1]
+    system: [base@v4, grounded@v1]
     user: question@v1
     timeout_sec: 60
   # 근거와 일반 지식을 나눠 답한다 — think off. think on · max_tokens 2048 은 위키 밖 질문 57개 중 44개에 빈 답
@@ -39,6 +42,6 @@ profiles:
     provider: ollama
     model: gemma4:12b
     params: {think: "off", temperature: 0.1, max_tokens: 2048, num_ctx: 8192}
-    system: [base@v3, partial@v2]
+    system: [base@v4, partial@v2]
     user: question@v1
     timeout_sec: 60
