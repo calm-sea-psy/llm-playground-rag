@@ -217,7 +217,9 @@ class AnswerService:
             yield AnswerEvent(
                 "delta", {"text": REFUSAL.format(query=question)}
             )  # 마지막 단계의 빈 답
-            yield _done(trace, outcome, self._clock())
+            # 화면에 나간 글은 생성이 아니라 고정 문구다 — 관문 · refuse 처럼 잘림 · 출처 번호를 싣지 않는다
+            # (한도에 닿았다는 사실은 로그의 done_reason 에 남는다. 시간 초과는 위에서 error 로 끝났다)
+            yield _done(trace, None, self._clock())
             return
 
     async def _generate(

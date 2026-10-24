@@ -356,16 +356,22 @@ def test_after_text_is_sent_hitting_the_limit_closes_with_done_not_a_new_stage(
     assert (done["truncated"], done["timed_out"]) == (True, False)
 
 
-def test_partial_cut_at_the_limit_with_nothing_sent_ends_with_the_fixed_refusal():
+def test_partial_cut_at_the_limit_with_nothing_sent_ends_with_the_fixed_refusal(
+    caplog: pytest.LogCaptureFixture,
+):
     # thinking 이 한도를 다 써 답 글이 하나도 없다 — score 0.6 은 low ≤ 점수 < high 라 partial 부터
+    caplog.set_level(logging.INFO, logger="playground_wiki.api.answer")
     cut = ScriptedLLM([], done_reason="length", completion_tokens=BUDGET)
     service, _ = _service(cut, score=0.6)
 
     events = _events(service)
+    record = json.loads(caplog.records[-1].getMessage().removeprefix("ask "))
 
     assert _text(events) == REFUSAL.format(query=QUESTION)
     done = _done(events)
-    assert (done["stage_path"], done["truncated"]) == (["partial"], True)
+    # 화면에 나간 건 고정 문구라 잘린 답이 아니다 — 한도에 닿은 사실은 로그에만
+    assert (done["stage_path"], done["truncated"], done["timed_out"]) == (["partial"], False, False)
+    assert record["done_reason"] == {"partial": "length"}
 
 
 def test_done_reason_goes_to_the_log_line_not_to_done(caplog: pytest.LogCaptureFixture):
