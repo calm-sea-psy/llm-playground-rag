@@ -183,13 +183,23 @@ TARGETS: tuple[tuple[str, ...], ...] = (
     ("시청", "률"),
 )
 # 때 표지 없이도 걸리는 꼴 — 자산 바로 뒤의 '시세' 는 그 자체로 지금 값을 묻는다 ("비트코인 시세").
-# 규칙 모르는 세트에서 "비트코인 시세" 가 관문을 지나 grounded 로 가서, 문서의 '현재'를 옮겨 옛 값을 지금 값처럼 답했다.
-# 시세 뒤에 명사가 오면(시세 차익 · 시세조종) 개념 질문, 연도가 있으면(1997년 금 시세) 옛 값이라 걸지 않는다.
-# '시세' 하나만으로는 걸지 않는다 — "조선 후기 쌀 시세" 같은 위키 질문이 걸린다
+# **'때 표지 + 대상어' 두 조건 설계의 유일한 예외다.** 규칙 모르는 세트에서 "비트코인 시세" 가 관문을 지나 grounded 로
+# 가서 문서의 '현재'를 옮겨 옛 값을 지금 값처럼 답했다 — 검색 → 답변 정책 → 생성을 끝까지 돌려 해로운 답을 본 증거로 넣었다.
+# 단일 조건 규칙을 더 넣으려면 놓친 질문이 있다는 것만으로는 부족하고, 같은 급의 끝까지 돌린 증거가 있어야 한다.
+# 시세 뒤에 명사가 오면(시세 차익 · 시세조종) 개념 질문, 연도(1997년 금 시세)나 과거 표지(작년 · 역대 · 초기 …)가 있으면
+# 옛 값을 묻는 것이라 걸지 않는다. '시세' 하나로는 걸지 않는다("조선 후기 쌀 시세"). 자산은 닫힌 목록 — 종목명까지 열면 끝이 없다
 PRICE_QUOTES: tuple[tuple[str, ...], ...] = tuple(
     (asset, "시세") for asset in ("비트코인", "이더리움", "코인", "금", "달러", "엔화", "유로")
 )
 NOUN_TAGS = frozenset({"NNG", "NNP", "NNB", "XSN"})
+# 숫자 없이 과거를 가리키는 말 (한 낱말로 나오는 것)
+PAST_MARKERS = frozenset(
+    {"작년", "지난해", "지난달", "지난주", "역대", "당시", "과거", "예전", "초기"}
+)
+# 띄어 쓴 '지난 해 · 달 · 주' 는 지나/VV + ㄴ/ETM(U+11AB 받침 자모) + 해 · 달 · 주 세 토큰으로 나온다 — 비표준이지만 흔하다
+PAST_PHRASES: tuple[tuple[str, ...], ...] = tuple(
+    ("지나", "\u11ab", unit) for unit in ("해", "달", "주")
+)
 
 # 종류별 고정 답. 실시간 답의 기준일은 덤프 날짜(configs/ingest.yaml source.dump_date)를 넣는다
 REPLIES: Mapping[str, str] = {
@@ -262,7 +272,7 @@ def realtime_match(tokens: Sequence[Token]) -> GateMatch | None:
         for end, pattern in _find(forms, PRICE_QUOTES)
         if not (end < len(tokens) and tokens[end].tag in NOUN_TAGS)
     ]
-    if quotes and not _has_year(tokens):
+    if quotes and not _points_to_past(tokens):
         return GateMatch("realtime", tuple(" ".join(pattern) for pattern in quotes))
     return None
 
@@ -289,9 +299,11 @@ def _find(
     return found
 
 
-def _has_year(tokens: Sequence[Token]) -> bool:
-    """'1997년' 같은 연도가 있으면 옛 값을 묻는 질문이다."""
-    return any(token.tag == "SN" and after.form == "년" for token, after in pairwise(tokens))
+def _points_to_past(tokens: Sequence[Token]) -> bool:
+    """'1997년' 같은 연도나 과거 표지(작년 · 지난 해 · 역대 · 초기 …)가 있으면 옛 값을 묻는 질문이다."""
+    has_year = any(token.tag == "SN" and after.form == "년" for token, after in pairwise(tokens))
+    past = any(token.form in PAST_MARKERS for token in tokens)
+    return has_year or past or bool(_find([token.form for token in tokens], PAST_PHRASES))
 
 
 def _part_of_other_word(tokens: Sequence[Token], end: int) -> bool:
