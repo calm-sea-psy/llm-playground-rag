@@ -85,7 +85,8 @@ def test_base_v3_states_today_and_dump_date_as_facts():
         .content
     )
 
-    assert f"오늘은 {TODAY} 이다. 문서는 {DUMP_DATE} 기준" in system
+    assert f"오늘은 {TODAY} 이고, 문서는 {DUMP_DATE} 기준" in system
+    assert "날짜를 판단할 때는 이 값을 따른다" in system  # 모델이 아는 '지금' 과 견주지 않게
 
 
 def test_korean_date_drops_leading_zeros():
