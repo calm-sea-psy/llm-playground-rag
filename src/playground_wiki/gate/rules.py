@@ -192,8 +192,14 @@ PRICE_QUOTES: tuple[tuple[str, ...], ...] = tuple(
     (asset, "시세") for asset in ("비트코인", "이더리움", "코인", "금", "달러", "엔화", "유로")
 )
 NOUN_TAGS = frozenset({"NNG", "NNP", "NNB", "XSN"})
-# 숫자 없이 과거를 가리키는 말 — 한 낱말로 나오는 것만 (띄어 쓴 '지난 해' 는 지나 + ㄴ + 해 로 쪼개져 못 잡는다)
-PAST_MARKERS = frozenset({"작년", "지난해", "지난달", "역대", "당시", "과거", "예전", "초기"})
+# 숫자 없이 과거를 가리키는 말 (한 낱말로 나오는 것)
+PAST_MARKERS = frozenset(
+    {"작년", "지난해", "지난달", "지난주", "역대", "당시", "과거", "예전", "초기"}
+)
+# 띄어 쓴 '지난 해 · 달 · 주' 는 지나/VV + ㄴ/ETM(U+11AB 받침 자모) + 해 · 달 · 주 세 토큰으로 나온다 — 비표준이지만 흔하다
+PAST_PHRASES: tuple[tuple[str, ...], ...] = tuple(
+    ("지나", "\u11ab", unit) for unit in ("해", "달", "주")
+)
 
 # 종류별 고정 답. 실시간 답의 기준일은 덤프 날짜(configs/ingest.yaml source.dump_date)를 넣는다
 REPLIES: Mapping[str, str] = {
@@ -294,9 +300,10 @@ def _find(
 
 
 def _points_to_past(tokens: Sequence[Token]) -> bool:
-    """'1997년' 같은 연도나 과거 표지(작년 · 역대 · 초기 …)가 있으면 옛 값을 묻는 질문이다."""
+    """'1997년' 같은 연도나 과거 표지(작년 · 지난 해 · 역대 · 초기 …)가 있으면 옛 값을 묻는 질문이다."""
     has_year = any(token.tag == "SN" and after.form == "년" for token, after in pairwise(tokens))
-    return has_year or any(token.form in PAST_MARKERS for token in tokens)
+    past = any(token.form in PAST_MARKERS for token in tokens)
+    return has_year or past or bool(_find([token.form for token in tokens], PAST_PHRASES))
 
 
 def _part_of_other_word(tokens: Sequence[Token], end: int) -> bool:
