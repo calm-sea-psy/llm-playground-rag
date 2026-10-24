@@ -14,9 +14,11 @@
 seed 0 으로 고정 — 다시 돌려도 같은 세트가 나온다. 종류마다 독립된 난수원을 써서 한 종류를 고쳐도 다른 종류가 흔들리지 않는다.
 세트 파일은 KorQuAD 가 CC BY-ND 라 git 제외 폴더(LLM 레포 bench/data/)에만 쓴다. 채점 코드는 고치지 않는다.
 
-사용법:
+사용법 (위키 레포 루트에서):
   uv run python scripts/build_bench_extra.py
   uv run python scripts/build_bench_extra.py --source f4-korquad-9014dd9e --out f4-extra-v1
+worktree 등 루트가 아닌 곳에서는 LLM 레포 경로를 넘긴다:
+  uv run python scripts/build_bench_extra.py --repo C:/Work/llm-playground-llm/bench/data
 """
 
 import argparse
@@ -31,7 +33,9 @@ from pathlib import Path
 
 from playground_evalkit import squash
 
-SOURCE_REPO = Path("../llm-playground-llm/bench/data")  # LLM 레포의 세트 폴더 (git 제외)
+# LLM 레포의 세트 폴더 (git 제외). 기본값은 위키 레포 루트에서 돌릴 때 기준 — worktree 등 다른 곳에서는
+# --repo 로 절대 경로(예: C:/Work/llm-playground-llm/bench/data)를 넘긴다.
+SOURCE_REPO = Path("../llm-playground-llm/bench/data")
 SOURCE_SET = "f4-korquad-9014dd9e"  # build_bench_set.py 가 만든 1단계 KorQuAD 세트
 OUT_SET = "f4-extra-v1"
 SEED = 0
@@ -234,18 +238,24 @@ DIRECT_TEMPLATES: tuple[DirectTemplate, ...] = (
 
 def main() -> None:
     args = _parse_args()
-    build(args.source, args.out)
+    build(args.repo, args.source, args.out)
 
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument(
+        "--repo",
+        type=Path,
+        default=SOURCE_REPO,
+        help="LLM 레포의 bench/data 경로 (위키 레포 루트가 아닌 곳에서 돌릴 때 절대 경로로)",
+    )
     parser.add_argument("--source", default=SOURCE_SET, help="입력 KorQuAD 세트 폴더 이름")
     parser.add_argument("--out", default=OUT_SET, help="만들 추가 세트 폴더 이름")
     return parser.parse_args()
 
 
-def build(source: str, out: str) -> None:
-    rows = _read_jsonl(SOURCE_REPO / source / "items.jsonl")
+def build(repo: Path, source: str, out: str) -> None:
+    rows = _read_jsonl(repo / source / "items.jsonl")
     answerable = [row for row in rows if row["kind"] == "answerable"]
     counterfactual = _build_counterfactual(answerable, random.Random(f"{SEED}:counterfactual"))
     benign, benign_counts = _build_benign(answerable)
@@ -253,7 +263,7 @@ def build(source: str, out: str) -> None:
     direct = _build_direct(answerable, random.Random(f"{SEED}:injection_direct"))
     items = counterfactual + benign + indirect + direct
 
-    out_dir = SOURCE_REPO / out
+    out_dir = repo / out
     _write_jsonl(out_dir / "items.jsonl", items)
     verify = [{"id": row["id"], **row["substitution"]} for row in counterfactual[:VERIFY_SAMPLE]]
     meta = {
