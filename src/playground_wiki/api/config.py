@@ -11,6 +11,7 @@ from playground_llm import ModelSpec
 from playground_retrieval.search import SearchSettings
 from playground_retrieval.store import PgConfig
 
+from playground_wiki.gate import QueryGate, Tokenizer
 from playground_wiki.generation import AnswerPolicy, Profile, Thresholds
 
 CONFIG_DIR = Path("configs")  # 레포 루트에서 실행할 때. RAG_CONFIG_DIR 로 바꾼다
@@ -58,6 +59,28 @@ class ApiConfig:
             bm25_index=Path(os.environ.get("RAG_BM25_INDEX_DIR", BM25_INDEX_DIR)) / collection,
         )
         return cls(search=search, pg=PgConfig.from_env())
+
+
+def load_dump_date(config_dir: Path) -> str:
+    """ingest.yaml 의 덤프 날짜(YYYYMMDD)를 프롬프트 · 관문 고정 답에 넣을 꼴로 ("2026년 10월 1일")."""
+    ingest = yaml.safe_load((config_dir / "ingest.yaml").read_text(encoding="utf-8"))
+    raw = str(ingest["source"]["dump_date"])
+    return f"{raw[:4]}년 {int(raw[4:6])}월 {int(raw[6:])}일"
+
+
+def load_query_gate(config_dir: Path, tokenizer: Tokenizer) -> QueryGate | None:
+    """answer.yaml 의 gate.enabled 가 켜져 있으면 질문 관문을 만든다. 꺼져 있으면 None.
+
+    분석기는 부르는 쪽이 넘긴다 — Kiwi 하나가 메모리를 약 500MB 써서, 검색(BM25)과 같은 인스턴스를 쓰게 한다.
+
+    Raises:
+      TypeError: gate.enabled 가 true · false 가 아닐 때 (따옴표 친 "yes" 같은 문자열).
+    """
+    raw = yaml.safe_load((config_dir / ANSWER_CONFIG).read_text(encoding="utf-8"))
+    enabled = raw["gate"]["enabled"]
+    if not isinstance(enabled, bool):
+        raise TypeError(f"{ANSWER_CONFIG}: gate.enabled must be true or false, got {enabled!r}")
+    return QueryGate(tokenizer) if enabled else None
 
 
 def load_answer_policy(config_dir: Path) -> AnswerPolicy:

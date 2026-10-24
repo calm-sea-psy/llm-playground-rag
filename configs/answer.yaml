@@ -1,5 +1,10 @@
 # 답변 정책 — 리랭커 1위 점수로 단계를 고르고, 단계마다 생성 설정(프로필)을 쓴다 (ADR-021)
 
+# 질문 관문 — 잡담 · 실시간 질문을 검색 전에 형태소 어휘 규칙으로 걸러 고정 답을 준다 (src/playground_wiki/gate).
+# 끄면 모든 질문이 검색 → 답변 정책으로 간다. 규칙 오탐이 의심될 때 · 관문 없이 평가할 때 끈다
+gate:
+  enabled: true
+
 # 2026-10-23 calibrate fit (scripts/calibrate_threshold.py fit · reports/2026-10-23-calibration.md).
 # KorQuAD calibrate 몫 173 + offwiki v1 82 (잡담 · 실시간은 어휘 규칙 몫이라 제외).
 # low 가 작은 이유 (ADR-025): 범위 밖 질문에 일반 지식으로 답하는 건 비용이 아니고, 거절은 점수가 아니라 partial 프롬프트의

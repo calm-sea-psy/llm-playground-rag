@@ -6,7 +6,14 @@ from playground_corpus import Chunk
 from playground_llm import PromptLibrary, Think
 from playground_retrieval.core import Hit
 
-from playground_wiki.api.config import ANSWER_CONFIG, load_answer_policy, parse_profiles
+from playground_wiki.api.config import (
+    ANSWER_CONFIG,
+    load_answer_policy,
+    load_dump_date,
+    load_query_gate,
+    parse_profiles,
+)
+from playground_wiki.gate import KiwiTokenizer, Token, fixed_reply
 from playground_wiki.generation import (
     NOT_FOUND,
     PROMPT_DIR,
@@ -113,3 +120,32 @@ def test_misspelled_profile_key_is_rejected(tmp_path: Path):
 
     with pytest.raises(ValueError, match="profile 'grounded' keys must be"):
         load_answer_policy(config_dir)
+
+
+class _UnusedTokenizer:
+    """관문이 꺼져 있거나 설정이 틀려 쓰이지 않는 분석기."""
+
+    def tokenize(self, text: str) -> list[Token]:
+        raise AssertionError("tokenizer must not be used")
+
+
+def test_repo_answer_yaml_enables_the_gate_and_reply_uses_the_dump_date():
+    gate = load_query_gate(CONFIG_DIR, KiwiTokenizer())
+
+    assert gate is not None
+    match = gate.check("오늘 서울 날씨는?")
+    assert match is not None
+    assert "2026년 10월 1일 기준" in fixed_reply(match, dump_date=load_dump_date(CONFIG_DIR))
+
+
+def test_gate_can_be_switched_off(tmp_path: Path):
+    (tmp_path / ANSWER_CONFIG).write_text("gate:\n  enabled: false\n", encoding="utf-8")
+
+    assert load_query_gate(tmp_path, _UnusedTokenizer()) is None
+
+
+def test_gate_switch_must_be_a_bool(tmp_path: Path):
+    (tmp_path / ANSWER_CONFIG).write_text('gate:\n  enabled: "yes"\n', encoding="utf-8")
+
+    with pytest.raises(TypeError, match="must be true or false"):
+        load_query_gate(tmp_path, _UnusedTokenizer())
