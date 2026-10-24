@@ -5,6 +5,8 @@ from typing import Annotated
 from fastapi import Depends, Request
 from playground_retrieval.search import SearchService
 
+from playground_wiki.api.answer import AnswerService
+
 
 def get_search_service(request: Request) -> SearchService:
     """앱이 시작할 때 lifespan 이 만든 검색 서비스."""
@@ -12,3 +14,11 @@ def get_search_service(request: Request) -> SearchService:
 
 
 SearchServiceDep = Annotated[SearchService, Depends(get_search_service)]
+
+
+def get_answer_service(request: Request) -> AnswerService:
+    """앱이 시작할 때 lifespan 이 만든 답변 서비스 (관문 · 검색 · 정책 · LLM 을 잇는다)."""
+    return request.app.state.answer_service
+
+
+AnswerServiceDep = Annotated[AnswerService, Depends(get_answer_service)]

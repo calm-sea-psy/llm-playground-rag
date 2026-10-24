@@ -1,7 +1,0 @@
-# LLM 설정 — OpenAI 호환 엔드포인트 (Ollama / vLLM)
-
-provider: ollama
-base_url: http://localhost:11434/v1
-model: gemma4
-temperature: 0.1
-max_tokens: 1024

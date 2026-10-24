@@ -786,8 +786,8 @@ ollama = [
 
 [[package]]
 name = "playground-retrieval"
-version = "0.1.0"
-source = { git = "https://github.com/calm-sea-psy/llm-playground-retrieval?tag=v0.1.0#3571f1e95665aaa1c1d6b29fa17cc8c171b4c029" }
+version = "0.1.1"
+source = { git = "https://github.com/calm-sea-psy/llm-playground-retrieval?tag=v0.1.1#2254e2b0225ce1ecc3ffee163b9fa0155260843b" }
 dependencies = [
     { name = "faiss-cpu" },
     { name = "kiwipiepy" },
@@ -839,7 +839,7 @@ requires-dist = [
     { name = "playground-corpus", extras = ["parquet", "local"], git = "https://github.com/calm-sea-psy/llm-playground-corpus?tag=v0.1.0" },
     { name = "playground-evalkit", git = "https://github.com/calm-sea-psy/llm-playground-llm?subdirectory=packages%2Fevalkit&tag=evalkit-v0.1.0" },
     { name = "playground-llm", extras = ["ollama"], git = "https://github.com/calm-sea-psy/llm-playground-llm?subdirectory=packages%2Fllm&rev=21486e7aa63c2276f94af8ff18b8d758ec60164c" },
-    { name = "playground-retrieval", extras = ["rerank"], git = "https://github.com/calm-sea-psy/llm-playground-retrieval?tag=v0.1.0" },
+    { name = "playground-retrieval", extras = ["rerank"], git = "https://github.com/calm-sea-psy/llm-playground-retrieval?tag=v0.1.1" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "qdrant-client", specifier = ">=1.19.1" },
     { name = "torch", specifier = ">=2.11.0", index = "https://download.pytorch.org/whl/cu128" },

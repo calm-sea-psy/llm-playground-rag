@@ -15,7 +15,6 @@ from playground_wiki.api.config import (
 )
 from playground_wiki.gate import KiwiTokenizer, Token, fixed_reply
 from playground_wiki.generation import (
-    NOT_FOUND,
     PROMPT_DIR,
     AnswerPolicy,
     Thresholds,
@@ -85,7 +84,7 @@ def test_repo_profiles_point_to_repo_prompts():
     grounded = build_prompt(
         profiles["grounded"], library, question="q", context=[hit], today="t", dump_date="d"
     )
-    assert NOT_FOUND in grounded.messages[0].content
+    assert '"못 찾음"' in grounded.messages[0].content  # grounded@v2 — 첫 줄 표지 (ADR-024)
 
 
 def test_load_builds_policy_and_turns_yaml_lists_into_tuples(tmp_path: Path):

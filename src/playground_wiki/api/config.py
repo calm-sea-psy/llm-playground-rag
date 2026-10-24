@@ -37,7 +37,7 @@ class ApiConfig:
         서브셋을 띄울 때는 RAG_COLLECTION=kowiki-subset-10000_kure-v1 처럼 지정한다.
         BM25 색인은 RAG_BM25_INDEX_DIR(기본 data/index/bm25) 아래 컬렉션 이름 폴더.
         """
-        config_dir = Path(os.environ.get("RAG_CONFIG_DIR", CONFIG_DIR))
+        config_dir = config_dir_from_env()
         ingest = yaml.safe_load((config_dir / "ingest.yaml").read_text(encoding="utf-8"))
         retrieval = yaml.safe_load((config_dir / "retrieval.yaml").read_text(encoding="utf-8"))
         source = ingest["source"]["name"]
@@ -60,6 +60,16 @@ class ApiConfig:
             bm25_index=Path(os.environ.get("RAG_BM25_INDEX_DIR", BM25_INDEX_DIR)) / collection,
         )
         return cls(search=search, pg=PgConfig.from_env())
+
+
+def config_dir_from_env() -> Path:
+    """설정 파일 폴더 — RAG_CONFIG_DIR, 없으면 configs/ (레포 루트에서 실행할 때)."""
+    return Path(os.environ.get("RAG_CONFIG_DIR", CONFIG_DIR))
+
+
+def log_questions_from_env() -> bool:
+    """질문 원문을 로그에 남길지 — RAG_LOG_QUESTIONS=1 일 때만 (ADR-027). 기본은 길이와 SHA-256 만."""
+    return os.environ.get("RAG_LOG_QUESTIONS") == "1"
 
 
 def load_dump_date(config_dir: Path) -> str:
