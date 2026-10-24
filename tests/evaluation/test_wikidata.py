@@ -153,6 +153,33 @@ def test_label_strict_needs_property_word_in_the_same_sentence():
     assert label_fact(question, apart).reason == "answer_not_with_property"
 
 
+def test_label_date_property_drops_no_fact_when_subject_chunk_has_any_date():
+    birth = _question("P569", ("1968년",), strict=True)
+    painting = _question("P571", ("1887년",), strict=True)
+
+    other_birth = [("홍길동", "홍길동은 1956년 3월 21일생이다. 신문 기자를 지냈다.")]
+    other_year = [("홍길동", "1886년 7월부터 12월까지 파리에서 그려졌다.")]
+    no_date = [("홍길동", "홍길동은 북한의 프로그래머이다.")]
+
+    decade = [("홍길동", "홍길동은 1990년대에 활동했다.")]
+
+    # "일생" 은 생년월일, "그려" 는 설립 · 시작의 동의어
+    assert label_fact(birth, other_birth).label == "dropped"
+    assert label_fact(painting, other_year).reason == "property_mentioned"
+    assert label_fact(birth, decade).reason == "other_date_in_subject"
+    assert label_fact(birth, no_date).label == "no_fact"
+
+
+def test_label_place_drops_no_fact_when_name_without_admin_suffix_is_in_context():
+    question = _question("P131", ("쿤두즈주",), strict=True)
+
+    city = [("홍길동", "아프가니스탄 쿤두즈시의 모스크에서 폭발이 일어났다.")]
+    elsewhere = [("홍길동", "아프가니스탄의 모스크에서 폭발이 일어났다.")]
+
+    assert label_fact(question, city).reason == "answer_stem_in_subject"
+    assert label_fact(question, elsewhere).label == "no_fact"
+
+
 def test_label_no_fact_only_when_subject_retrieved_without_answer_or_property_words():
     question = _question("P26", ("김영희",), strict=False)
 

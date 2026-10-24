@@ -25,6 +25,14 @@ GREGORIAN = (
 DAY, MONTH, YEAR = 11, 10, 9  # Wikidata time precision
 _QUALIFIER = re.compile(r"\s*\([^()]*\)$")  # 문서 제목 끝의 "(축구 선수)" 같은 구분어
 _SENTENCE_END = re.compile(r"(?<=[.!?。])\s+|\n+")
+# 날짜 표기 ("1956년" · "1960년대" · "2020년 4월"). 날짜 속성의 답 없음 B 는 주제 문서 청크에 이것이 하나라도 있으면
+# 뺀다 — 위키데이터와 다른 날짜가 문서에 적혀 있으면(신성호 생년월일 1968 vs "1956년 3월 21일생") 모델이 문서대로 답해도
+# 지어냄으로 세게 된다 (2026-10-24 파일럿)
+_DATE = re.compile(r"\d{1,4}\s*년")
+# 행정 단위 꼬리. 장소 속성의 답 없음 B 는 꼬리를 뗀 이름이 주제 문맥에 있으면 뺀다 — "쿤두즈주"가 답인데
+# 문맥에 "쿤두즈시의 모스크"가 있으면 문맥에 답이 있는 셈이다 (2026-10-24 파일럿)
+_ADMIN_SUFFIX = re.compile(r"(특별자치시|특별자치도|특별시|광역시|시|주|군|구|도|현|성|읍|면)$")
+_MIN_STEM_CHARS = 2  # "광주"→"광" 처럼 한 글자만 남으면 아무 문장에나 걸린다
 
 
 @dataclass(frozen=True)
@@ -44,18 +52,21 @@ class PropertyTemplate:
     shape: AnswerShape
     common_values: bool = False
     """지명 · 국가 · 종교처럼 흔한 값 — 청크에 값만 있어도 다른 맥락일 수 있어 동의어와 같은 문장일 때만 답 있음."""
+    sentence_words: tuple[str, ...] = ()
+    """답 있음의 같은 문장 조건에만 더 쓰는 흔한 낱말("에 있는" 등). 답 없음 B 검사에는 쓰지 않는다 — 거의 모든 문장에 나온다."""
 
 
 PROPERTIES: tuple[PropertyTemplate, ...] = (
     PropertyTemplate(
         "P569", "생년월일", "time", True,
         ("{주제}{은} 언제 태어났나?", "{주제}의 생년월일은?", "{주제}{이} 태어난 날짜는?"),
-        ("태어", "출생", "생년"), "date_number",
+        ("태어", "출생", "생년", "태생", "일생"), "date_number",
     ),
     PropertyTemplate(
         "P570", "사망일", "time", True,
         ("{주제}{은} 언제 사망했나?", "{주제}의 사망일은?", "{주제}{이} 세상을 떠난 날짜는?"),
-        ("사망", "별세", "타계", "숨지", "숨졌", "서거", "세상을 떠"), "date_number",
+        ("사망", "별세", "타계", "숨지", "숨졌", "서거", "세상을 떠", "작고", "순직", "전사", "영면"),
+        "date_number",
     ),
     PropertyTemplate(
         "P19", "출생지", "item", True,
@@ -70,64 +81,70 @@ PROPERTIES: tuple[PropertyTemplate, ...] = (
     PropertyTemplate(
         "P26", "배우자", "item", True,
         ("{주제}의 배우자는 누구인가?", "{주제}{과} 결혼한 사람은?"),
-        ("배우자", "아내", "남편", "부인", "결혼", "혼인", "왕비", "왕후", "약혼"), "person",
+        ("배우자", "아내", "남편", "부인", "결혼", "혼인", "왕비", "왕후", "약혼", "부부", "재혼", "이혼", "사별"),
+        "person",
     ),
     PropertyTemplate(
         "P40", "자녀", "item", True,
         ("{주제}의 자녀는 누구인가?", "{주제}의 자식 가운데 한 명은?"),
-        ("아들", "딸", "자녀", "자식", "슬하", "장남", "장녀", "차남"), "person",
+        ("아들", "딸", "자녀", "자식", "슬하", "장남", "장녀", "차남", "외동", "소생", "후손"), "person",
     ),
     PropertyTemplate(
         "P69", "출신 학교", "item", True,
         ("{주제}{은} 어느 학교를 졸업했나?", "{주제}의 출신 학교는?"),
-        ("졸업", "학교", "대학", "입학", "학사", "석사", "박사", "수학", "재학"), "other",
+        ("졸업", "학교", "대학", "입학", "학사", "석사", "박사", "수학", "재학", "학위", "전공", "학과", "학부", "유학"),
+        "other",
     ),
     PropertyTemplate(
         "P140", "종교", "item", True,
         ("{주제}의 종교는?", "{주제}{이} 믿은 종교는?"),
-        ("종교", "신자", "신앙", "교도", "세례", "출가", "승려"), "other", common_values=True,
+        ("종교", "신자", "신앙", "교도", "세례", "출가", "승려", "가톨릭", "천주교", "개신교", "기독교", "불교",
+         "이슬람", "목사", "신부"),
+        "other", common_values=True,
     ),
     PropertyTemplate(
         "P571", "설립 · 시작", "time", False,
         ("{주제}{은} 언제 설립되었나?", "{주제}{은} 언제 만들어졌나?"),
-        ("설립", "창립", "창설", "창단", "개교", "개관", "건립", "세워", "창간", "출범", "결성", "개통"),
+        ("설립", "창립", "창설", "창단", "개교", "개관", "건립", "세워", "창간", "출범", "결성", "개통",
+         "제작", "그려", "그린", "완성", "완공", "준공", "개업", "개점", "창작", "건조", "진수", "생산", "만들", "발족"),
         "date_number",
     ),
     PropertyTemplate(
         "P577", "발표일", "time", False,
         ("{주제}{은} 언제 발표되었나?", "{주제}{이} 처음 공개된 날짜는?"),
-        ("발매", "발표", "출시", "개봉", "출간", "출판", "공개", "방영", "방송", "초연"),
+        ("발매", "발표", "출시", "개봉", "출간", "출판", "공개", "방영", "방송", "초연", "간행", "발행", "발간", "연재"),
         "date_number",
     ),
     PropertyTemplate(
         "P57", "감독", "item", False,
         ("{주제}의 감독은 누구인가?", "{주제}{을} 연출한 사람은?"),
-        ("감독", "연출"), "person",
+        ("감독", "연출", "메가폰"), "person",
     ),
     PropertyTemplate(
         "P50", "저자", "item", False,
         ("{주제}의 저자는 누구인가?", "{주제}{을} 쓴 사람은?"),
-        ("저자", "작가", "지은", "썼", "집필", "저술", "지었"), "person",
+        ("저자", "작가", "지은", "썼", "집필", "저술", "지었", "펴낸", "출간", "소설가", "시인"), "person",
     ),
     PropertyTemplate(
         "P86", "작곡가", "item", False,
         ("{주제}의 작곡가는 누구인가?", "{주제}{을} 작곡한 사람은?"),
-        ("작곡",), "person",
+        ("작곡", "음악", "곡을"), "person",
     ),
     PropertyTemplate(
         "P112", "설립자", "item", False,
         ("{주제}의 설립자는 누구인가?", "{주제}{을} 세운 사람은?"),
-        ("설립", "창립", "창업", "세운", "세웠", "창설", "창단"), "person",
+        ("설립", "창립", "창업", "세운", "세웠", "창설", "창단", "만든", "만들"), "person",
     ),
     PropertyTemplate(
         "P131", "소재 행정 구역", "item", False,
         ("{주제}{은} 어느 행정 구역에 있나?", "{주제}의 소재지는?"),
-        ("위치", "소재", "있는", "자리"), "other", common_values=True,
+        ("위치", "소재", "주소"), "other", common_values=True, sentence_words=("있는", "있다", "자리"),
     ),
     PropertyTemplate(
         "P159", "본사 소재지", "item", False,
         ("{주제}의 본사는 어디에 있나?", "{주제}의 본부가 있는 곳은?"),
-        ("본사", "본부", "본점", "소재"), "other", common_values=True,
+        ("본사", "본부", "본점", "소재", "본거지", "사옥"), "other", common_values=True,
+        sentence_words=("있는", "있다"),
     ),
 )  # fmt: skip
 PROPERTY_IDS = frozenset(template.pid for template in PROPERTIES)
@@ -311,22 +328,31 @@ def label_fact(question: FactQuestion, hits: Sequence[tuple[str, str]]) -> FactL
     """상위 청크 (제목, 본문) 로 라벨을 붙인다.
 
     answerable: 주제 문서 청크에 참값이 있다 (strict 면 속성 동의어와 같은 문장에).
-    no_fact: 주제 문서가 검색됐는데 상위 청크 어디에도 참값도 속성 동의어도 없다 — 동의어만 있어도 빼는 건
-      다른 표기로 적힌 참값을 지어냄으로 세지 않으려는 것. 다른 문서 청크에 참값이 있어도 근거 있는 답이라 뺀다.
+    no_fact: 주제 문서가 검색됐는데 상위 청크 어디에도 참값이 없고, 주제를 다루는 청크(주제 문서 청크 · 주제 이름이
+      나오는 청크)에 속성 동의어도 없다 — 동의어만 있어도 빼는 건 다른 표기로 적힌 참값을 지어냄으로 세지 않으려는 것.
+      다른 문서 청크에 참값이 있어도 근거 있는 답이라 뺀다. 날짜 속성은 주제 문서 청크에 날짜 표기가 하나라도 있으면
+      뺀다 — 위키데이터와 다른 날짜가 문서에 적혀 있을 수 있다.
     dropped: 그 밖 (이유를 reason 에).
     """
-    fact, synonyms = question.fact, question.template.synonyms
+    fact, template = question.fact, question.template
     subject = normalize_title(fact.subject)
+    name = squash(_QUALIFIER.sub("", fact.subject))
     answers = [squash(answer) for answer in fact.answers]
-    subject_ranks, answer_in_subject = [], False
+    subject_ranks, answer_in_subject, date_in_subject = [], False, False
+    about_subject = []  # 주제를 다루는 청크 — 속성 동의어는 여기서만 본다
     for rank, (title, text) in enumerate(hits, start=1):
         if normalize_title(title) != subject:
+            if name and name in squash(text):
+                about_subject.append(text)
             continue
         subject_ranks.append(rank)
+        about_subject.append(text)
         answer_in_subject = answer_in_subject or any(answer in squash(text) for answer in answers)
+        date_in_subject = date_in_subject or bool(_DATE.search(text))
         for sentence in _sentences(text) if fact.strict else [text]:
             if any(answer in squash(sentence) for answer in answers) and (
-                not fact.strict or any(word in sentence for word in synonyms)
+                not fact.strict
+                or any(word in sentence for word in template.synonyms + template.sentence_words)
             ):
                 return FactLabel("answerable", "answer_in_subject_chunk", rank)
     if answer_in_subject:
@@ -336,8 +362,15 @@ def label_fact(question: FactQuestion, hits: Sequence[tuple[str, str]]) -> FactL
         return FactLabel("dropped", "answer_in_other_document")
     if not subject_ranks:
         return FactLabel("dropped", "subject_not_retrieved")
-    if any(word in joined for word in synonyms):
+    if any(word in text for text in about_subject for word in template.synonyms):
         return FactLabel("dropped", "property_mentioned")
+    if template.kind == "item" and template.common_values:
+        stems = {_ADMIN_SUFFIX.sub("", answer) for answer in answers}
+        stems = {stem for stem in stems if len(stem) >= _MIN_STEM_CHARS}
+        if any(stem in squash(text) for text in about_subject for stem in stems):
+            return FactLabel("dropped", "answer_stem_in_subject")
+    if template.kind == "time" and date_in_subject:
+        return FactLabel("dropped", "other_date_in_subject")
     return FactLabel("no_fact", "subject_retrieved_fact_absent", subject_ranks[0])
 
 
