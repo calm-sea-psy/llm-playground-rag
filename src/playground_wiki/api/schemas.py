@@ -1,4 +1,4 @@
-"""/search · /health 요청 · 응답 형식."""
+"""/search · /health · /ask 요청 · 응답 형식. /ask 응답은 SSE 라 이벤트 형식은 api/answer.py 에 있다."""
 
 from typing import Literal
 
@@ -88,3 +88,11 @@ class HealthResponse(BaseModel):
     status: Literal["ok"]
     collection: str
     chunks: int = Field(description="BM25 색인에 올린 청크 수")
+
+
+class AskRequest(BaseModel):
+    """답변 요청. 응답은 text/event-stream (stage · sources · delta · done · error)."""
+
+    model_config = ConfigDict(frozen=True, str_strip_whitespace=True)
+
+    question: str = Field(min_length=1, max_length=MAX_QUERY_CHARS, description="자연어 질문")

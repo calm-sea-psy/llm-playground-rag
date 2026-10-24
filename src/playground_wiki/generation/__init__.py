@@ -30,6 +30,7 @@ from playground_wiki.generation.stream import (
     MarkerReader,
     MarkerResult,
     MarkerStatus,
+    read_marker,
 )
 
 __all__ = [
@@ -53,6 +54,7 @@ __all__ = [
     "check_profiles",
     "format_context",
     "korean_date",
+    "read_marker",
     "resolve_citations",
     "sources",
     "wiki_url",

@@ -787,7 +787,7 @@ ollama = [
 [[package]]
 name = "playground-retrieval"
 version = "0.1.0"
-source = { git = "https://github.com/calm-sea-psy/llm-playground-retrieval?tag=v0.1.0#3571f1e95665aaa1c1d6b29fa17cc8c171b4c029" }
+source = { editable = "../llm-playground-retrieval" }
 dependencies = [
     { name = "faiss-cpu" },
     { name = "kiwipiepy" },
@@ -800,6 +800,24 @@ dependencies = [
 [package.optional-dependencies]
 rerank = [
     { name = "playground-corpus", extra = ["local"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "faiss-cpu", specifier = ">=1.15.1" },
+    { name = "kiwipiepy", specifier = ">=0.24.1" },
+    { name = "numpy", specifier = ">=2.5.4" },
+    { name = "playground-corpus", git = "https://github.com/calm-sea-psy/llm-playground-corpus?tag=v0.1.0" },
+    { name = "playground-corpus", extras = ["local"], marker = "extra == 'rerank'", git = "https://github.com/calm-sea-psy/llm-playground-corpus?tag=v0.1.0" },
+    { name = "psycopg", extras = ["binary"], specifier = ">=3.3.6" },
+    { name = "qdrant-client", specifier = ">=1.19.1" },
+]
+provides-extras = ["rerank"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=9.1.1" },
+    { name = "ruff", specifier = ">=0.17.1" },
 ]
 
 [[package]]
@@ -839,7 +857,7 @@ requires-dist = [
     { name = "playground-corpus", extras = ["parquet", "local"], git = "https://github.com/calm-sea-psy/llm-playground-corpus?tag=v0.1.0" },
     { name = "playground-evalkit", git = "https://github.com/calm-sea-psy/llm-playground-llm?subdirectory=packages%2Fevalkit&tag=evalkit-v0.1.0" },
     { name = "playground-llm", extras = ["ollama"], git = "https://github.com/calm-sea-psy/llm-playground-llm?subdirectory=packages%2Fllm&rev=21486e7aa63c2276f94af8ff18b8d758ec60164c" },
-    { name = "playground-retrieval", extras = ["rerank"], git = "https://github.com/calm-sea-psy/llm-playground-retrieval?tag=v0.1.0" },
+    { name = "playground-retrieval", extras = ["rerank"], editable = "../llm-playground-retrieval" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "qdrant-client", specifier = ">=1.19.1" },
     { name = "torch", specifier = ">=2.11.0", index = "https://download.pytorch.org/whl/cu128" },

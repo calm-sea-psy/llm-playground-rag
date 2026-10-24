@@ -151,6 +151,12 @@ class CitationStream:
         return answer.text
 
 
+def read_marker(text: str) -> MarkerResult:
+    """스트리밍이 아닌 답(다 받은 글)의 첫 줄 표지 — 조각으로 받은 것과 같은 판정이다."""
+    reader = MarkerReader(hold_chars=len(text) + 1)
+    return reader.feed(text) or reader.finish()
+
+
 def _could_be_marker(text: str) -> bool:
     """붙잡아 둔 글이 아직 표지의 앞부분일 수 있나 ("못" · "못 찾" · 공백만)."""
     head = text.lstrip()

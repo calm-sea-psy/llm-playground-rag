@@ -48,6 +48,7 @@ from playground_wiki.generation import (
     build_prompt,
     check_profiles,
     korean_date,
+    read_marker,
 )
 
 VARIANTS = {"v3": "base@v3", "v4": "base@v4"}
@@ -240,7 +241,12 @@ def _answer(
             return {"path": path, "answer": None, "error": str(e)}
         answer, tokens = generation.text, generation.usage.completion_tokens
         truncated = tokens >= int(profiles[stage].spec.params["max_tokens"])
-        if stage == "grounded" and (NOT_FOUND in answer or "찾을 수 없" in answer):
+        if stage != "grounded":
+            continue
+        # grounded@v2 는 첫 줄 표지 — /ask 와 같은 판정. v1 은 고정 문장이라 그 문장으로
+        marked = read_marker(answer)
+        answer = marked.rest if marked.status != "missing" else answer
+        if marked.status == "not_found" or NOT_FOUND in answer or not answer.strip():
             path.append("partial")
             stages.append("partial")
     return {"path": path, "answer": answer, "truncated": truncated, "completion_tokens": tokens}

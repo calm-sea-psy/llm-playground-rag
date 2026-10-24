@@ -45,7 +45,8 @@ playground-corpus = { git = "https://github.com/calm-sea-psy/llm-playground-corp
 playground-evalkit = { git = "https://github.com/calm-sea-psy/llm-playground-llm", tag = "evalkit-v0.1.0", subdirectory = "packages/evalkit" }
 # 첫 태그 llm-v0.1.0 은 Phase 2 완료 때 붙인다. 그때까지 main 커밋(Think enum, PR #5)으로 고정
 playground-llm = { git = "https://github.com/calm-sea-psy/llm-playground-llm", rev = "21486e7aa63c2276f94af8ff18b8d758ec60164c", subdirectory = "packages/llm" }
-playground-retrieval = { git = "https://github.com/calm-sea-psy/llm-playground-retrieval", tag = "v0.1.0" }
+# 임시 — 검색 레포 feat/analyzer-injection(SearchService.build(analyzer=))을 같이 고치는 중. 그 PR 이 머지돼 v0.1.1 태그가 붙으면 태그로 되돌린다
+playground-retrieval = { path = "../llm-playground-retrieval", editable = true }
 
 [[tool.uv.index]]
 name = "pytorch-cu128"
